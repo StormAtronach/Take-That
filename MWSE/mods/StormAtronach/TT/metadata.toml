@@ -1,0 +1,9 @@
+[package]
+name        = "Take That!"
+description = "A modern combat mod with blocking, parrying, dodging, and spell batting."
+homepage    = "https://www.nexusmods.com/morrowind/mods/TBD"
+authors     = ["StormAtronach"]
+version     = "1.0.0"
+
+[tools.mwse]
+lua-mod = "StormAtronach.TT"
