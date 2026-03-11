@@ -14,13 +14,11 @@ function sounds.getRandom(subdir)
         fileCache[subdir] = {}
         local path = "data files\\sound\\sa_tt\\" .. subdir
 
-        -- lfs.dir returns nil when the directory doesn't exist; guard prevents crash
-        local iter = lfs.dir(path)
-        if not iter then
+        if not lfs.directoryexists(path) then
             log:warn("Sound directory not found: %s", path)
         else
-            for file in iter do
-                if file:match("%.wav$") or file:match("%.mp3$") then
+            for file in lfs.dir(path) do
+                if file:match("%.wav$") then
                     table.insert(fileCache[subdir], file)
                 end
             end
@@ -49,7 +47,7 @@ function sounds.playRandom(subdir, reference, volume)
             soundPath = soundPath,
             reference = reference,
             volume = volume or 1,
-            pitch = math.random(90, 110) / 100,  -- Slight pitch variation
+            pitch = math.random(70, 130) / 100,  -- Slight pitch variation
         })
     end
 end
