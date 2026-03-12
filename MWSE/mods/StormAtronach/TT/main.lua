@@ -310,7 +310,12 @@ local function onAttack(e)
     -- Power attacking!
     if playerIsThatYou and areYouReady then
         if config.parry_event_window then
-            mechanics.parry.active = true
+            local delay = config.parry_active_delay or 0
+            if delay > 0 then
+                timer.start({ duration = delay, callback = function() mechanics.parry.active = true end })
+            else
+                mechanics.parry.active = true
+            end
         else
             activate({ data = { mechanic = mechanics.parry } })
         end

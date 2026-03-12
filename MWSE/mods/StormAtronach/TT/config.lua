@@ -17,6 +17,7 @@ local default_config = {
     block_fatigue_cost      = 25.0, -- fatigue drained per second while holding block
     parry_window            = 0.5,  -- Player parry window (seconds), used when parry_event_window is false
     parry_event_window      = false, -- If true, parry stays active from swing release until the player's attack lands
+    parry_active_delay      = 0.2,  -- Seconds before parry.active is set (parry_event_window mode)
     parry_min_swing          = 0,
     bat_min_skill           = 25,
     bat_range               = 160, -- Player batting search radius (game units)

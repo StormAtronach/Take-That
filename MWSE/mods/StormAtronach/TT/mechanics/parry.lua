@@ -118,6 +118,31 @@ end
 
 
 
+-- Deferred outcome state — keyed by reference, supports multiple simultaneous parries
+local pendingAttackerOutcomes = {}  -- [attackerRef] = outcome
+local pendingDefenderOutcomes = {}  -- [defenderRef] = outcome
+local attackerGuardTimers     = {}  -- [attackerRef] = timer
+local defenderGuardTimers     = {}  -- [defenderRef] = timer
+
+local ATTACKER_GUARD = 1.0   -- safety expiry for the next-frame callback
+local DEFENDER_GUARD = 1.0   -- 
+
+local function onDefenderAttackHit(e)
+    local key = e.reference.id
+    local p = pendingDefenderOutcomes[key]
+    if not p then return end
+    pendingDefenderOutcomes[key] = nil
+    if defenderGuardTimers[key] then
+        defenderGuardTimers[key]:cancel()
+        defenderGuardTimers[key] = nil
+    end
+    if not p.defenderHandle:valid() then
+        log:debug("Defender outcome expired: reference invalid")
+        return
+    end
+    applyEffects(p.defenderMobile, p.defenderHandle:getObject(), p.defenderEffects)
+end
+
 --- Apply condition damage to a weapon
 --- @param actor tes3mobileActor
 --- @param damageAmount number
@@ -189,8 +214,58 @@ function parry.attackHitCallback(e)
     -- Get and apply outcome
     local outcome = getOutcome(opposedCheck)
 
-    applyEffects(e.mobile, e.reference, outcome.attacker)
-    applyEffects(e.targetMobile, e.targetReference, outcome.defender)
+    -- Defer attacker effects to the next frame
+    local aKey    = e.reference.id
+    local aHandle = tes3.makeSafeObjectHandle(e.reference)
+    if attackerGuardTimers[aKey] then
+        attackerGuardTimers[aKey]:cancel()
+        attackerGuardTimers[aKey] = nil
+    end
+    pendingAttackerOutcomes[aKey] = {
+        attackerMobile  = e.mobile,
+        attackerEffects = outcome.attacker,
+    }
+    timer.delayOneFrame(function()
+        local p = pendingAttackerOutcomes[aKey]
+        if not p then return end
+        pendingAttackerOutcomes[aKey] = nil
+        if attackerGuardTimers[aKey] then
+            attackerGuardTimers[aKey]:cancel()
+            attackerGuardTimers[aKey] = nil
+        end
+        if not aHandle:valid() then
+            log:debug("Attacker outcome expired: reference invalid")
+            return
+        end
+        applyEffects(p.attackerMobile, aHandle:getObject(), p.attackerEffects)
+    end)
+    attackerGuardTimers[aKey] = timer.start({ duration = ATTACKER_GUARD, callback = function()
+        if pendingAttackerOutcomes[aKey] then
+            log:debug("Attacker outcome guard expired")
+            pendingAttackerOutcomes[aKey] = nil
+        end
+        attackerGuardTimers[aKey] = nil
+    end })
+
+    -- Defer defender effects to their own next attackHit
+    local dKey    = e.targetReference.id
+    local dHandle = tes3.makeSafeObjectHandle(e.targetReference)
+    if defenderGuardTimers[dKey] then
+        defenderGuardTimers[dKey]:cancel()
+        defenderGuardTimers[dKey] = nil
+    end
+    pendingDefenderOutcomes[dKey] = {
+        defenderMobile  = e.targetMobile,
+        defenderEffects = outcome.defender,
+        defenderHandle  = dHandle,
+    }
+    defenderGuardTimers[dKey] = timer.start({ duration = DEFENDER_GUARD, callback = function()
+        if pendingDefenderOutcomes[dKey] then
+            log:debug("Defender outcome guard expired")
+            pendingDefenderOutcomes[dKey] = nil
+        end
+        defenderGuardTimers[dKey] = nil
+    end })
 
     -- Play a sound
     sounds.playRandom("parry",e.reference,1)
@@ -237,5 +312,7 @@ function parry.attackHitCallback(e)
 
 end
 
+
+event.register("attackHit", onDefenderAttackHit)
 
 return parry
