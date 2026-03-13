@@ -244,10 +244,10 @@ local function resetState()
     end
     log:debug("Cooldowns reset")
 
-    -- We also use this stream to clean the slowed actors and the attacks counter tables
-    common.slowedActors = {}
-    common.parryingActors = {}
-    activeWeaponTrackers = {}
+    -- Clear shared tables in-place to preserve references held by interop consumers
+    table.clear(common.slowedActors)
+    table.clear(common.parryingActors)
+    table.clear(activeWeaponTrackers)
     event.unregister(tes3.event.simulate, onSimulate_collisionParry)
     log:debug("Tables reset")
 
@@ -392,6 +392,11 @@ local function attackHitCallback(e)
         -- Is the target the player
         local lookOutPlayer = e.targetReference == tes3.player
 
+        -- Clear attacker's own parry window when their attack resolves (before any early returns)
+        if not (e.reference == tes3.player and config.parry_debug_always_active) then
+            common.parryingActors[e.reference] = nil
+        end
+
         -- Dodge stream
         if lookOutPlayer and mechanics.dodge.active then
             e.mobile.actionData.physicalDamage = 0
@@ -408,11 +413,6 @@ local function attackHitCallback(e)
             if e.targetReference == tes3.player or config.enemy_parry_active then
                 mechanics.parry.attackHitCallback(e)
             end
-        end
-
-        -- Clear attacker's own parry window when their attack resolves
-        if not (e.reference == tes3.player and config.parry_debug_always_active) then
-            common.parryingActors[e.reference] = nil
         end
 
 end

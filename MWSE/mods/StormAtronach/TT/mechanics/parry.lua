@@ -118,28 +118,9 @@ end
 
 -- Deferred outcome state — keyed by reference, supports multiple simultaneous parries
 local pendingAttackerOutcomes = {}  -- [attackerRef] = outcome
-local pendingDefenderOutcomes = {}  -- [defenderRef] = outcome
 local attackerGuardTimers     = {}  -- [attackerRef] = timer
-local defenderGuardTimers     = {}  -- [defenderRef] = timer
 
 local ATTACKER_GUARD = 1.0   -- safety expiry for the next-frame callback
-local DEFENDER_GUARD = 1.0   -- 
-
-local function onDefenderAttackHit(e)
-    local key = e.reference.id
-    local p = pendingDefenderOutcomes[key]
-    if not p then return end
-    pendingDefenderOutcomes[key] = nil
-    if defenderGuardTimers[key] then
-        defenderGuardTimers[key]:cancel()
-        defenderGuardTimers[key] = nil
-    end
-    if not p.defenderHandle:valid() then
-        log:debug("Defender outcome expired: reference invalid")
-        return
-    end
-    applyEffects(p.defenderMobile, p.defenderHandle:getObject(), p.defenderEffects)
-end
 
 --- Apply condition damage to a weapon
 --- @param actor tes3mobileActor
@@ -273,25 +254,17 @@ function parry.attackHitCallback(e)
         attackerGuardTimers[aKey] = nil
     end })
 
-    -- Defer defender effects to their own next attackHit
-    local dKey    = e.targetReference.id
+    -- Defer defender effects to the next frame (mirrors attacker deferral)
     local dHandle = tes3.makeSafeObjectHandle(e.targetReference)
-    if defenderGuardTimers[dKey] then
-        defenderGuardTimers[dKey]:cancel()
-        defenderGuardTimers[dKey] = nil
-    end
-    pendingDefenderOutcomes[dKey] = {
-        defenderMobile  = e.targetMobile,
-        defenderEffects = outcome.defender,
-        defenderHandle  = dHandle,
-    }
-    defenderGuardTimers[dKey] = timer.start({ duration = DEFENDER_GUARD, callback = function()
-        if pendingDefenderOutcomes[dKey] then
-            log:debug("Defender outcome guard expired")
-            pendingDefenderOutcomes[dKey] = nil
+    local dMobile = e.targetMobile
+    local dEffects = outcome.defender
+    timer.delayOneFrame(function()
+        if not dHandle:valid() then
+            log:debug("Defender outcome expired: reference invalid")
+            return
         end
-        defenderGuardTimers[dKey] = nil
-    end })
+        applyEffects(dMobile, dHandle:getObject(), dEffects)
+    end)
 
     -- Play a sound
     sounds.playRandom("parry",e.reference,1)
@@ -321,16 +294,15 @@ function parry.attackHitCallback(e)
     local a  = e.mobile
     local tr = e.targetReference
     local t  = e.targetMobile
-    -- VFX
+    -- VFX: collision mode already fired sparks at detection time; just consume the stored position.
+    -- Standard mode places sparks at the height-midpoint between the two actors.
     local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
-    local vfxPos
-    if config.parry_collision_mode and parry.collisionMid then
-        vfxPos = parry.collisionMid
+    if config.parry_collision_mode then
         parry.collisionMid = nil
-    else
-        vfxPos = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2
+    elseif VFXspark then
+        local vfxPos = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2
+        tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = vfxPos}
     end
-    tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = vfxPos}
 
 
 
@@ -347,7 +319,5 @@ end
 
 
 parry.outcomes = parryOutcomes
-
-event.register("attackHit", onDefenderAttackHit)
 
 return parry
