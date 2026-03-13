@@ -32,6 +32,9 @@ local default_config = {
     -- NPC parry
     enemy_parry_active      = false,
     enemy_min_attackSwing   = 0.75,
+    -- Force counter: auto-release the player's charged attack when an NPC starts attacking them
+    force_counter_enabled   = false,
+    force_counter_cooldown  = 1.0,
     -- Alternative mechanic for the weapon block
     block_skill_bonus_active        = false,
     block_weapon_blockSkill_bonus   = 0.2,

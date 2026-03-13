@@ -273,6 +273,7 @@ end
 -- Keyed by reference; contains the reference while that actor is mid-swing.
 -- Populated on `attack`, cleared on `attackHit` (or resetState).
 local activeWeaponTrackers = {}
+local forceCounterLastTime = 0
 local onSimulate_collisionParry  -- forward declaration
 
 local function addWeaponTracker(ref)
@@ -608,6 +609,20 @@ local function onAttack(e)
     -- Incoming attack dodge trigger
     if not playerIsThatYou and e.targetReference and (e.targetReference == tes3.player or e.targetReference == tes3.player1stPerson) then
         mechanics.dodge.onIncomingAttack()
+    end
+
+    -- Force counter: auto-release the player's charged attack when an NPC targets them.
+    if config.force_counter_enabled and not playerIsThatYou then
+        if e.targetReference == tes3.player or e.targetReference == tes3.player1stPerson then
+            local mob = tes3.mobilePlayer
+            local now = os.clock()
+            if mob.readiedWeapon and mob.actionData.attackSwing > 0
+            and now - (forceCounterLastTime or 0) >= config.force_counter_cooldown then
+                forceCounterLastTime = now
+                log:debug("Force counter triggered against %s (swing=%.2f)", e.reference.id, mob.actionData.attackSwing)
+                tes3.worldController.inputController.mouseState.buttons[1] = 0
+            end
+        end
     end
 
     -- Momentum recovery
