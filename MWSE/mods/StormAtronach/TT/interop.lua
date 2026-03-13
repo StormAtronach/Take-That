@@ -4,6 +4,7 @@
 ---   if TT then ... end
 
 local config = require("StormAtronach.TT.config")
+local common = require("StormAtronach.TT.lib.common")
 local parry  = require("StormAtronach.TT.mechanics.parry")
 
 local interop = {}
@@ -12,6 +13,11 @@ local interop = {}
 --- Modify entries at any time to change what happens when a parry resolves.
 --- @type table
 interop.parryOutcomes = parry.outcomes
+
+--- Set of actors whose parry window is currently active, keyed by tes3reference.
+--- A truthy value means the actor is ready to parry an incoming hit this frame.
+--- @type table<tes3reference, boolean>
+interop.parryingActors = common.parryingActors
 
 --- Enable or disable a mechanic by name. Takes effect immediately.
 --- @param name string  "block" | "parry" | "dodge" | "spellbatting"

@@ -102,6 +102,11 @@ local function registerModConfig()
         callback = modActivation,
     }
     page:createOnOffButton{
+        label = "Collision-Based Parry",
+        description = "When enabled, a parry triggers only when both actors are mid-swing and their weapon segments come within the collision threshold. Replaces the time-window and event-window modes.",
+        configKey = "parry_collision_mode",
+    }
+    page:createOnOffButton{
         label = "Enable Dodge",
         description = "Toggle the dodge mechanic on or off.",
         configKey = "dodge_enabled",
@@ -319,28 +324,9 @@ local function registerModConfig()
     }
 
     parrySettings:createOnOffButton{
-        label = "Event-based parry window",
-        description = "If enabled, the player's parry window lasts from the moment they release their swing until their attack lands — no timer. If disabled, a fixed-duration timer window is used instead.",
-        configKey = "parry_event_window",
-    }
-    parrySettings:createSlider{
-        label = "Player Parry Window (seconds)",
-        description = "Duration of the player's parry window after releasing a swing. Only used when the event-based window is disabled.",
-        min = 0.1, max = 1.0, step = 0.05, jump = 0.1, decimalPlaces = 2,
-        configKey = "parry_window",
-    }
-
-    parrySettings:createOnOffButton{
         label = "NPC Parry Active",
         description = "If this is enabled, NPCs will be able to parry your attacks.",
         configKey ="enemy_parry_active",
-    }
-
-    parrySettings:createSlider{
-        label = "NPC Parry Window (seconds)",
-        description = "This is the base window for NPC parrying.",
-        min = 0.1, max = 0.5, step = 0.1, jump = 0.1, decimalPlaces = 1,
-        configKey ="enemy_parry_window",
     }
 
     parrySettings:createSlider{
@@ -442,6 +428,13 @@ local function registerModConfig()
         description = "Real-time seconds to ease in and out of the slow-mo effect. 0 = instant snap.",
         min = 0.0, max = 0.5, step = 0.01, jump = 0.05, decimalPlaces = 2,
         configKey = "parry_slowmo_ramp_time",
+    }
+
+    parrySettings:createSlider{
+        label = "Collision Threshold (game units)",
+        description = "How close two weapon segments must be to register a collision parry. Smaller values require more precise positioning.",
+        min = 1, max = 50, step = 1, jump = 5,
+        configKey = "parry_collision_threshold",
     }
 
     local parryDebug = parrySettings:createCategory{ label = "Debug" }

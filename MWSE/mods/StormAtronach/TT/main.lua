@@ -111,15 +111,125 @@ local function deactivate(mechanic)
     end
 end
 
--- Stores active timer handles for NPC parry windows, keyed by reference.
--- Allows cancellation on re-attack (window refresh) and on game load/toggle.
-local parryTimers = {}
 
--- Stores activation-delay timer handles, keyed by reference id string.
--- Used for any actor whose parry-active flag is set via a delayed timer
--- (currently: player in parry_event_window mode). Cancelled when attackHit
--- fires for that actor so a stale timer cannot re-open the window after it closed.
-local parryActivationTimers = {}
+
+-- ── Collision-parry geometry helpers ─────────────────────────────────────────
+-- Returns the weapon attachment node for a reference (hilt bone or hand bone).
+local function getWeaponNode(ref)
+    if not ref or not ref.sceneNode then return nil end
+    return ref.sceneNode:getObjectByName("Weapon")
+        or ref.sceneNode:getObjectByName("Bip01 R Hand")
+end
+
+-- Estimates the tip of a weapon using the object bounding box + world transform.
+local function estimateTip(weaponNode, ref)
+    local meshNode = weaponNode:getObjectByName("Weapon") or weaponNode
+    local wt  = meshNode.worldTransform
+    local mob = ref and ref.mobile
+    local rw  = mob and mob.readiedWeapon
+    local box = rw and rw.object and rw.object.boundingBox
+    if not box then return wt.translation end
+    local localTip = (box.max:length() >= box.min:length()) and box.max or box.min
+    local rotated  = tes3vector3.new(0, 0, localTip.y)
+    return wt.translation + wt.rotation * (rotated * wt.scale)
+end
+
+-- Segment-to-segment closest distance; also returns the midpoint of the closest pair.
+local function segSegDist(a1, a2, b1, b2)
+    local u  = a2 - a1
+    local v  = b2 - b1
+    local w0 = a1 - b1
+    local a  = u:dot(u)
+    local b  = u:dot(v)
+    local c  = v:dot(v)
+    local d  = u:dot(w0)
+    local e  = v:dot(w0)
+    local denom = a * c - b * b
+    local s, t
+    if denom < 1e-8 then
+        s = 0
+        t = (b > c) and (d / b) or (e / c)
+    else
+        s = (b * e - c * d) / denom
+        t = (a * e - b * d) / denom
+    end
+    s = math.max(0, math.min(1, s))
+    t = math.max(0, math.min(1, t))
+    local pa  = a1 + u * s
+    local pb  = b1 + v * t
+    return pa:distance(pb), (pa + pb) * 0.5
+end
+
+-- Keyed by reference; contains the reference while that actor is mid-swing.
+-- Populated on `attack`, cleared on `attackHit` (or resetState).
+local activeWeaponTrackers = {}
+
+local function onSimulate_collisionParry()
+    -- Need at least two actors swinging simultaneously
+    local refs = {}
+    for ref in pairs(activeWeaponTrackers) do refs[#refs + 1] = ref end
+    if #refs < 2 then return end
+
+    for i = 1, #refs do
+        for j = i + 1, #refs do
+            local refA = refs[i]
+            local refB = refs[j]
+
+            -- NPC-to-NPC guard: skip if they are not in combat with each other.
+            -- Player involvement bypasses the check (player mobile does not maintain hostileActors).
+            local playerInvolved = refA == tes3.player or refB == tes3.player
+            if not playerInvolved then
+                local mobA = refA.mobile
+                local inCombat = false
+                if mobA then
+                    for _, hostile in ipairs(mobA.hostileActors) do
+                        if hostile == refB.mobile then inCombat = true; break end
+                    end
+                end
+                if not inCombat then goto nextPair end
+            end
+
+            local nodeA = getWeaponNode(refA)
+            local nodeB = getWeaponNode(refB)
+            if not nodeA or not nodeB then goto nextPair end
+
+            local posA = nodeA.worldTransform.translation
+            local tipA = estimateTip(nodeA, refA)
+            local posB = nodeB.worldTransform.translation
+            local tipB = estimateTip(nodeB, refB)
+
+            local dist, mid = segSegDist(posA, tipA, posB, tipB)
+            log:debug("Collision probe: %s vs %s  dist=%.1f", refA.id, refB.id, dist)
+
+            if dist < config.parry_collision_threshold then
+                log:debug("Collision parry triggered: %s vs %s at dist=%.1f", refA.id, refB.id, dist)
+
+                -- Sparks at the midpoint
+                local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
+                if VFXspark then
+                    tes3.createVisualEffect{ object = VFXspark, repeatCount = 1, position = mid }
+                end
+
+                -- Activate parry flags for both sides
+                mechanics.parry.collisionMid = mid  -- consumed by attackHitCallback for VFX placement
+                if refA == tes3.player or refB == tes3.player then
+                    common.parryingActors[tes3.player] = true
+                end
+                if config.enemy_parry_active then
+                    if refA ~= tes3.player then common.parryingActors[refA] = true end
+                    if refB ~= tes3.player then common.parryingActors[refB] = true end
+                end
+
+                -- Remove both from tracking so this pair cannot re-trigger
+                activeWeaponTrackers[refA] = nil
+                activeWeaponTrackers[refB] = nil
+                return  -- refs table is now stale; let the next frame re-evaluate remaining pairs
+            end
+
+            ::nextPair::
+        end
+    end
+end
 
 local function resetState()
     -- Cancel any in-progress slow-mo and reset timescale
@@ -137,10 +247,8 @@ local function resetState()
     -- We also use this stream to clean the slowed actors and the attacks counter tables
     common.slowedActors = {}
     common.parryingActors = {}
-    for _, t in pairs(parryTimers) do t:cancel() end
-    parryTimers = {}
-    for _, t in pairs(parryActivationTimers) do t:cancel() end
-    parryActivationTimers = {}
+    activeWeaponTrackers = {}
+    event.unregister(tes3.event.simulate, onSimulate_collisionParry)
     log:debug("Tables reset")
 
     -- Reset and reload block/dodge controllers so they target the fresh player scene node
@@ -265,17 +373,18 @@ local function attackHitCallback(e)
     local ID = e.reference.id
     log:trace("Attack hit event, ID: %s, TS: %s",ID,TS)
 
-    -- Cancel any pending activation-delay timer for this attacker
-    if parryActivationTimers[ID] then
-        parryActivationTimers[ID]:cancel()
-        parryActivationTimers[ID] = nil
+    -- Collision mode: remove attacker from weapon tracking
+    if activeWeaponTrackers[e.reference] then
+        activeWeaponTrackers[e.reference] = nil
+        if not next(activeWeaponTrackers) then
+            event.unregister(tes3.event.simulate, onSimulate_collisionParry)
+        end
     end
 
     if not e.targetReference or not e.targetMobile then
         log:debug("attackHit fired with no target: attacker=%s", ID)
-        -- Still close the player's parry window so it doesn't stay open after a miss
-        if config.parry_enabled and e.reference == tes3.player and not config.parry_debug_always_active then
-            mechanics.parry.active = false
+        if not (e.reference == tes3.player and config.parry_debug_always_active) then
+            common.parryingActors[e.reference] = nil
         end
         return
     end
@@ -294,20 +403,16 @@ local function attackHitCallback(e)
             return
         end
 
-        -- Parry stream
-        if config.parry_enabled then
-            if lookOutPlayer and mechanics.parry.active then
+        -- Parry stream: defender must have an active parry flag; NPC-as-defender requires enemy_parry_active
+        if config.parry_enabled and common.parryingActors[e.targetReference] then
+            if e.targetReference == tes3.player or config.enemy_parry_active then
                 mechanics.parry.attackHitCallback(e)
             end
+        end
 
-            -- Parry stream for NPCs
-            if config.enemy_parry_active and common.parryingActors[e.targetReference] then
-                mechanics.parry.attackHitCallback(e)
-            end
-
-            if e.reference == tes3.player and not config.parry_debug_always_active then
-                mechanics.parry.active = false
-            end
+        -- Clear attacker's own parry window when their attack resolves
+        if not (e.reference == tes3.player and config.parry_debug_always_active) then
+            common.parryingActors[e.reference] = nil
         end
 
 end
@@ -338,22 +443,26 @@ local function onAttack(e)
     local areYouReady       = tes3.mobilePlayer.actionData.attackSwing >= config.parry_min_swing
 
     -- Power attacking!
-    if playerIsThatYou and areYouReady then
-        if config.parry_event_window then
-            local delay = config.parry_active_delay or 0
-            if delay > 0 then
-                if parryActivationTimers[ID] then parryActivationTimers[ID]:cancel() end
-                parryActivationTimers[ID] = timer.start({ duration = delay, callback = function()
-                    parryActivationTimers[ID] = nil
-                    mechanics.parry.active = true
-                end })
-            else
-                mechanics.parry.active = true
-            end
-        else
-            activate({ data = { mechanic = mechanics.parry } })
+    if config.parry_enabled and config.parry_collision_mode then
+        -- Collision mode: track any armed attacker; compute per-frame segment distances
+        local mob = e.reference.mobile
+        if mob and mob.readiedWeapon then
+            activeWeaponTrackers[e.reference] = true
+            event.register(tes3.event.simulate, onSimulate_collisionParry)
+            log:debug("Collision tracking started for %s", e.reference.id)
         end
-        log:trace("Parry mechanic started")
+    elseif config.parry_enabled and not config.parry_collision_mode then
+        local mob = e.reference.mobile
+        local swing = mob and mob.actionData.attackSwing or 0
+        if mob and mob.readiedWeapon then
+            if playerIsThatYou and areYouReady then
+                common.parryingActors[tes3.player] = true
+                log:trace("Player parry window opened")
+            elseif not playerIsThatYou and config.enemy_parry_active and swing >= config.enemy_min_attackSwing then
+                common.parryingActors[e.reference] = true
+                log:trace("NPC parry window opened for %s", e.reference.id)
+            end
+        end
     end
 
     -- Spell batting
@@ -364,25 +473,6 @@ local function onAttack(e)
     -- Incoming attack dodge trigger
     if not playerIsThatYou and e.targetReference and (e.targetReference == tes3.player or e.targetReference == tes3.player1stPerson) then
         mechanics.dodge.onIncomingAttack()
-    end
-
-    -- Enemy parry
-    if not playerIsThatYou and config.enemy_parry_active then
-        log:trace("NPC Parry mechanic started")
-        local enemySwing = e.mobile.actionData.attackSwing
-        if enemySwing >= config.enemy_min_attackSwing then
-            -- Cancel any existing window for this NPC (re-attack refreshes it)
-            if parryTimers[e.reference] then parryTimers[e.reference]:cancel() end
-            common.parryingActors[e.reference] = true
-            parryTimers[e.reference] = timer.start({
-                duration = config.enemy_parry_window,
-                type     = timer.simulate,
-                callback = function()
-                    common.parryingActors[e.reference] = nil
-                    parryTimers[e.reference] = nil
-                end,
-            })
-        end
     end
 
     -- Momentum recovery

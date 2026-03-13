@@ -19,9 +19,6 @@ local default_config = {
     parry_cool_down_time    = 0.1,
     dodge_cool_down_time    = 1,
     block_fatigue_cost      = 25.0, -- fatigue drained per second while holding block
-    parry_window            = 0.5,  -- Player parry window (seconds), used when parry_event_window is false
-    parry_event_window      = false, -- If true, parry stays active from swing release until the player's attack lands
-    parry_active_delay      = 0.2,  -- Seconds before parry.active is set (parry_event_window mode)
     parry_min_swing          = 0,
     bat_min_skill           = 25,
     bat_range               = 160, -- Player batting search radius (game units)
@@ -34,7 +31,6 @@ local default_config = {
     block_weapon_skill_mult = 0.6,
     -- NPC parry
     enemy_parry_active      = false,
-    enemy_parry_window      = 0.2,
     enemy_min_attackSwing   = 0.75,
     -- Alternative mechanic for the weapon block
     block_skill_bonus_active        = false,
@@ -84,6 +80,9 @@ local default_config = {
     parry_weapon_damage_enabled            = false,
     parry_weapon_damage_fraction_attacker  = 0.25,  -- fraction of blocked damage lost by attacker's weapon
     parry_weapon_damage_fraction_defender  = 0.10,  -- fraction of blocked damage lost by defender's weapon
+    -- Collision parry
+    parry_collision_mode       = false,  -- use weapon-segment collision to trigger parry (both actors must be swinging)
+    parry_collision_threshold  = 10,     -- game units; weapon segments closer than this trigger collision
     -- Debug
     parry_debug_always_active = false,  -- keep parry window open indefinitely (testing only)
     -- Parry fatigue drain: attacker loses fatigue scaled to the skill-gap outcome

@@ -51,9 +51,7 @@ end
 
 local parry = {
     name = "Parry",
-    window = config.parry_window,
     cooldown = false,
-    active = false
 }
 
 -- Parry outcome lookup table
@@ -227,10 +225,8 @@ function parry.attackHitCallback(e)
     
     -- Calculate opposed check
     local opposedCheck = defenderSkillLevel - attackerSkillLevel
-    log:debug("Parry opposed check: defender(%d) - attacker(%d) = %d", 
+    log:debug("Parry opposed check: defender(%d) - attacker(%d) = %d",
         defenderSkillLevel, attackerSkillLevel, opposedCheck)
-
-    log:debug(string.format("Parry skill check: %s - %s = %s", defenderSkillLevel, attackerSkillLevel, opposedCheck))
     
     -- Get and apply outcome
     local outcome = getOutcome(opposedCheck)
@@ -327,7 +323,14 @@ function parry.attackHitCallback(e)
     local t  = e.targetMobile
     -- VFX
     local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
-    tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2}
+    local vfxPos
+    if config.parry_collision_mode and parry.collisionMid then
+        vfxPos = parry.collisionMid
+        parry.collisionMid = nil
+    else
+        vfxPos = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2
+    end
+    tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = vfxPos}
 
 
 
