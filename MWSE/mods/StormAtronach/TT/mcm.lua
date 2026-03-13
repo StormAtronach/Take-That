@@ -89,6 +89,31 @@ local function registerModConfig()
         callback = modActivation
     }
 
+    page:createOnOffButton{
+        label = "Enable Block",
+        description = "Toggle the blocking mechanic on or off.",
+        configKey = "block_enabled",
+        callback = modActivation,
+    }
+    page:createOnOffButton{
+        label = "Enable Parry",
+        description = "Toggle the parry mechanic on or off.",
+        configKey = "parry_enabled",
+        callback = modActivation,
+    }
+    page:createOnOffButton{
+        label = "Enable Dodge",
+        description = "Toggle the dodge mechanic on or off.",
+        configKey = "dodge_enabled",
+        callback = modActivation,
+    }
+    page:createOnOffButton{
+        label = "Enable Spell Batting",
+        description = "Toggle the spell batting mechanic on or off.",
+        configKey = "spellbatting_enabled",
+        callback = modActivation,
+    }
+
     page:createKeyBinder{
         label = "Block Hotkey",
         description = "Choose a hotkey for starting the block. Mouse buttons are allowed, as well as combinations (shift+stuff, ctrl+stuff, etc.)",
@@ -339,6 +364,25 @@ local function registerModConfig()
         configKey ="parry_light_duration",
     }
 
+    local parryWeaponDmg = parrySettings:createCategory{ label = "Weapon Damage on Parry" }
+    parryWeaponDmg:createOnOffButton{
+        label = "Enable Weapon Damage",
+        description = "When enabled, both weapons take condition damage on a successful parry, proportional to the physical damage that was blocked.",
+        configKey = "parry_weapon_damage_enabled",
+    }
+    parryWeaponDmg:createSlider{
+        label = "Attacker Weapon Damage Fraction",
+        description = "Fraction of the blocked physical damage applied as condition loss to the attacker's weapon. 0.25 = 25% of blocked damage.",
+        min = 0.0, max = 1.0, step = 0.05, jump = 0.1, decimalPlaces = 2,
+        configKey = "parry_weapon_damage_fraction_attacker",
+    }
+    parryWeaponDmg:createSlider{
+        label = "Defender Weapon Damage Fraction",
+        description = "Fraction of the blocked physical damage applied as condition loss to the defender's weapon. 0.10 = 10% of blocked damage.",
+        min = 0.0, max = 1.0, step = 0.05, jump = 0.1, decimalPlaces = 2,
+        configKey = "parry_weapon_damage_fraction_defender",
+    }
+
     local parryFatigue = parrySettings:createCategory{ label = "Fatigue Drain on Attacker" }
     parryFatigue:createOnOffButton{
         label = "Enable Parry Fatigue Drain",
@@ -398,6 +442,13 @@ local function registerModConfig()
         description = "Real-time seconds to ease in and out of the slow-mo effect. 0 = instant snap.",
         min = 0.0, max = 0.5, step = 0.01, jump = 0.05, decimalPlaces = 2,
         configKey = "parry_slowmo_ramp_time",
+    }
+
+    local parryDebug = parrySettings:createCategory{ label = "Debug" }
+    parryDebug:createOnOffButton{
+        label = "Parry Always Active",
+        description = "DEBUG: Once triggered by a swing, the player's parry window never closes. Useful for testing parry outcomes without precise timing.",
+        configKey = "parry_debug_always_active",
     }
 
     local gmstCategory = balancing:createCategory{ label = "Fatigue GMSTs" }

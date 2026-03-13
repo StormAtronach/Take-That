@@ -2,6 +2,10 @@
 local default_config = {
     log_level               = mwse.logLevel.info,
     enabled                 = true,
+    block_enabled           = true,
+    parry_enabled           = true,
+    dodge_enabled           = true,
+    spellbatting_enabled    = true,
     name                    = "Take That",
     hotkey                  = {keyCode = tes3.scanCode.b},
     parrySlowDown           = false,
@@ -75,6 +79,13 @@ local default_config = {
     -- NPC visual reactions (dodge/parry animations on miss)
     npc_dodge_enabled           = true,
     npc_react_use_weapon_anims  = false,
+    -- Parry weapon damage: both weapons take condition damage on a successful parry,
+    -- scaled as a fraction of the physical damage the attacker would have dealt.
+    parry_weapon_damage_enabled            = false,
+    parry_weapon_damage_fraction_attacker  = 0.25,  -- fraction of blocked damage lost by attacker's weapon
+    parry_weapon_damage_fraction_defender  = 0.10,  -- fraction of blocked damage lost by defender's weapon
+    -- Debug
+    parry_debug_always_active = false,  -- keep parry window open indefinitely (testing only)
     -- Parry fatigue drain: attacker loses fatigue scaled to the skill-gap outcome
     parry_fatigue_drain_enabled = true,
     parry_fatigue_drain_neg = 10,  -- attacker dominated (outcome < 0)

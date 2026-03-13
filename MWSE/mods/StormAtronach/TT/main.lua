@@ -114,6 +114,12 @@ end
 -- Allows cancellation on re-attack (window refresh) and on game load/toggle.
 local parryTimers = {}
 
+-- Stores activation-delay timer handles, keyed by reference id string.
+-- Used for any actor whose parry-active flag is set via a delayed timer
+-- (currently: player in parry_event_window mode). Cancelled when attackHit
+-- fires for that actor so a stale timer cannot re-open the window after it closed.
+local parryActivationTimers = {}
+
 local function resetState()
     -- Cancel any in-progress slow-mo and reset timescale
     if mainSlowmoState then
@@ -132,6 +138,8 @@ local function resetState()
     common.parryingActors = {}
     for _, t in pairs(parryTimers) do t:cancel() end
     parryTimers = {}
+    for _, t in pairs(parryActivationTimers) do t:cancel() end
+    parryActivationTimers = {}
     log:debug("Tables reset")
 
     -- Reset and reload block/dodge controllers so they target the fresh player scene node
@@ -155,7 +163,11 @@ local function activate(e)
     deactivate(mechanic)
     mechanic.active = true
     if mechanic.window then
-        timer.start({duration = mechanic.window, callback = function() deactivate(mechanic) end, type = timer.simulate})
+        timer.start({duration = mechanic.window, callback = function()
+            if not (mechanic == mechanics.parry and config.parry_debug_always_active) then
+                deactivate(mechanic)
+            end
+        end, type = timer.simulate})
         log:debug("Window started for %s. Duration: %s seconds", mechanic.name, mechanic.window)
     end
 end
@@ -192,7 +204,7 @@ local function onAttackStart_momentum(e)
 end
 
 -- On the simulate event, apply momentum scalars and manage the slow table
-local function onSimulate_slow(e)
+local function onSimulate_slow()
     -- Step 1: apply momentum + TT slow factor to all momentum-tracked actors
     if config.momentum_enabled then
         for ref, s in pairs(actorState.getAllState()) do
@@ -252,6 +264,21 @@ local function attackHitCallback(e)
     local ID = e.reference.id
     log:trace("Attack hit event, ID: %s, TS: %s",ID,TS)
 
+    -- Cancel any pending activation-delay timer for this attacker
+    if parryActivationTimers[ID] then
+        parryActivationTimers[ID]:cancel()
+        parryActivationTimers[ID] = nil
+    end
+
+    if not e.targetReference or not e.targetMobile then
+        log:debug("attackHit fired with no target: attacker=%s", ID)
+        -- Still close the player's parry window so it doesn't stay open after a miss
+        if config.parry_enabled and e.reference == tes3.player and not config.parry_debug_always_active then
+            mechanics.parry.active = false
+        end
+        return
+    end
+
         -- Is the target the player
         local lookOutPlayer = e.targetReference == tes3.player
 
@@ -267,17 +294,19 @@ local function attackHitCallback(e)
         end
 
         -- Parry stream
-        if lookOutPlayer and mechanics.parry.active then
-            mechanics.parry.attackHitCallback(e)
-        end
+        if config.parry_enabled then
+            if lookOutPlayer and mechanics.parry.active then
+                mechanics.parry.attackHitCallback(e)
+            end
 
-        -- Parry stream for NPCs
-        if config.enemy_parry_active and common.parryingActors[e.targetReference] then
-            mechanics.parry.attackHitCallback(e)
-        end
+            -- Parry stream for NPCs
+            if config.enemy_parry_active and common.parryingActors[e.targetReference] then
+                mechanics.parry.attackHitCallback(e)
+            end
 
-        if e.reference == tes3.player then
-            mechanics.parry.active = false
+            if e.reference == tes3.player and not config.parry_debug_always_active then
+                mechanics.parry.active = false
+            end
         end
 
 end
@@ -312,7 +341,11 @@ local function onAttack(e)
         if config.parry_event_window then
             local delay = config.parry_active_delay or 0
             if delay > 0 then
-                timer.start({ duration = delay, callback = function() mechanics.parry.active = true end })
+                if parryActivationTimers[ID] then parryActivationTimers[ID]:cancel() end
+                parryActivationTimers[ID] = timer.start({ duration = delay, callback = function()
+                    parryActivationTimers[ID] = nil
+                    mechanics.parry.active = true
+                end })
             else
                 mechanics.parry.active = true
             end
@@ -418,33 +451,34 @@ local function initialized()
     event.register(tes3.event.attackHit,      attackHitCallback)
 
     -- ── Block ──────────────────────────────────────────────────────────────────
-    -- "simulate" (pre-sim): enforce attack/magic lock while block is raised.
-    -- "simulated" (post-sim): drive bone controllers so transforms persist after
-    --   the engine's own scene-graph update pass.
-    event.register("keybindTested", mechanics.block.onKeybindTested)
-    event.register("simulate",      mechanics.block.onSimulate)
-    event.register("simulated",     mechanics.block.onSimulated, { priority = -10000 })
+    if config.block_enabled then
+        event.register("keybindTested", mechanics.block.onKeybindTested)
+        event.register("simulate",      mechanics.block.onSimulate)
+        event.register("simulated",     mechanics.block.onSimulated, { priority = -10000 })
+    end
 
     -- ── Dodge ──────────────────────────────────────────────────────────────────
-    -- dodge.init() resolves the back-key scan code and registers the keyDown handler.
-    -- "TT:dodgeTriggered" is the decoupling event: dodge.lua fires it; main.lua
-    --   sets the window duration and calls activate() without dodge.lua needing a
-    --   reference to activate().
-    mechanics.dodge.init()
-    mechanics.dodge.loadControllers()
-    event.register("TT:dodgeTriggered", function(e)
-        mechanics.dodge.window = e.duration
-        activate({ data = { mechanic = mechanics.dodge } })
-    end)
+    if config.dodge_enabled then
+        mechanics.dodge.init()
+        mechanics.dodge.loadControllers()
+        event.register("TT:dodgeTriggered", function(e)
+            mechanics.dodge.window = e.duration
+            activate({ data = { mechanic = mechanics.dodge } })
+        end)
+    end
 
     -- ── Parry slow-motion ──────────────────────────────────────────────────────
-    event.register(tes3.event.attackStart, parrySlowDown)
-    event.register(tes3.event.attackHit,   resetTimescale)
+    if config.parry_enabled then
+        event.register(tes3.event.attackStart, parrySlowDown)
+        event.register(tes3.event.attackHit,   resetTimescale)
+    end
 
     -- ── Spell batting ──────────────────────────────────────────────────────────
-    event.register(tes3.event.mobileActivated, mechanics.spellbatting.onMobileActivated)
-    event.register(tes3.event.attack,          mechanics.spellbatting.onAttack)
-    event.register("projectileExpire",         mechanics.spellbatting.onProjectileExpire)
+    if config.spellbatting_enabled then
+        event.register(tes3.event.mobileActivated, mechanics.spellbatting.onMobileActivated)
+        event.register(tes3.event.attack,          mechanics.spellbatting.onAttack)
+        event.register("projectileExpire",         mechanics.spellbatting.onProjectileExpire)
+    end
 
     -- ── Momentum ───────────────────────────────────────────────────────────────
     event.register(tes3.event.simulate,          onSimulate_slow)

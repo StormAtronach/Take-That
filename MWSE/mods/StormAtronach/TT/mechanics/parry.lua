@@ -169,6 +169,7 @@ end
 --- @param e attackHitEventData
 function parry.attackHitCallback(e)
     log:trace("Parry attackHit event started")
+    local blockedDamage = e.mobile.actionData.physicalDamage
     e.mobile.actionData.physicalDamage = 0
 
     -- Block on-strike enchantment from parried attacker for this frame
@@ -213,6 +214,15 @@ function parry.attackHitCallback(e)
     
     -- Get and apply outcome
     local outcome = getOutcome(opposedCheck)
+
+    -- Weapon condition damage scaled to blocked physical damage
+    if config.parry_weapon_damage_enabled and blockedDamage > 0 then
+        local dmgAttacker = blockedDamage * config.parry_weapon_damage_fraction_attacker
+        local dmgDefender = blockedDamage * config.parry_weapon_damage_fraction_defender
+        damageWeapon(e.mobile,       dmgAttacker)
+        damageWeapon(e.targetMobile, dmgDefender)
+        log:debug("Weapon damage: attacker=%.1f defender=%.1f (blocked=%.1f)", dmgAttacker, dmgDefender, blockedDamage)
+    end
 
     -- Defer attacker effects to the next frame
     local aKey    = e.reference.id
@@ -296,7 +306,7 @@ function parry.attackHitCallback(e)
     local tr = e.targetReference
     local t  = e.targetMobile
     -- VFX
-    local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks")
+    local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
     tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2}
 
 
@@ -312,6 +322,8 @@ function parry.attackHitCallback(e)
 
 end
 
+
+parry.outcomes = parryOutcomes
 
 event.register("attackHit", onDefenderAttackHit)
 
