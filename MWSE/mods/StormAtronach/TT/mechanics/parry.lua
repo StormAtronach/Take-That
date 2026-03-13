@@ -169,6 +169,26 @@ end
 --- @param e attackHitEventData
 function parry.attackHitCallback(e)
     log:trace("Parry attackHit event started")
+
+    -- Guard: only parry attacks between actors who are in combat with each other.
+    -- Prevents parrying stray hits from actors fighting someone else.
+    -- If the player is involved (as attacker or defender) we assume combat intent and skip the check,
+    -- since the player mobile does not maintain hostileActors reliably.
+    local playerInvolved = e.mobile == tes3.mobilePlayer or e.targetMobile == tes3.mobilePlayer
+    if not playerInvolved then
+        local inCombatWithDefender = false
+        for _, hostile in ipairs(e.mobile.hostileActors) do
+            if hostile == e.targetMobile then
+                inCombatWithDefender = true
+                break
+            end
+        end
+        if not inCombatWithDefender then
+            log:debug("Parry skipped: %s is not in combat with %s", e.reference.id, e.targetReference.id)
+            return
+        end
+    end
+
     local blockedDamage = e.mobile.actionData.physicalDamage
     e.mobile.actionData.physicalDamage = 0
 
