@@ -160,11 +160,74 @@ local function segSegDist(a1, a2, b1, b2)
     return pa:distance(pb), (pa + pb) * 0.5
 end
 
+-- Spawns a debug sphere at `pos` for 2 seconds using the mwse widgets.nif unitSphere.
+-- Reuses the same scene node across calls (identified by name "TT_collision_sphere").
+local function spawnDebugSphere(pos)
+    local root = tes3.worldController.vfxManager.worldVFXRoot
+    local sphere = root:getObjectByName("TT_collision_sphere") --[[@as niTriShape?]]
+    if not sphere then
+        sphere = tes3.loadMesh("mwse\\widgets.nif"):getObjectByName("unitSphere"):clone() --[[@as niTriShape]]
+        sphere.name = "TT_collision_sphere"
+        root:attachChild(sphere, true)
+    end
+    sphere.appCulled  = false
+    sphere.translation = pos
+    sphere.scale       = 5
+    sphere:update()
+    sphere:updateEffects()
+    sphere:updateProperties()
+    timer.start({ duration = 2.0, callback = function()
+        sphere.appCulled = true
+        sphere:update()
+    end })
+end
+
+-- Spawns the parry spark VFX. When config.parry_collision_vfx_at_point is true and
+-- checkFrustum is true, tries to spawn at `pos` (frustum-checked). Falls back to the
+-- height-midpoint between refA and refB in all other cases.
+local function spawnParryVFX(pos, checkFrustum, refA, refB)
+    local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
+    if not VFXspark then return end
+    local spawnPos
+    if checkFrustum and config.parry_collision_vfx_at_point then
+        local camera = tes3.worldController.worldCamera.cameraData.camera
+        ---@diagnostic disable-next-line: undefined-field
+        if camera:worldPointToScreenPoint(pos) then
+            spawnPos = pos
+        end
+    end
+    if not spawnPos then
+        local mA, mB = refA.mobile, refB.mobile
+        if mA and mB then
+        spawnPos = (refA.position + tes3vector3.new(0,0,mA.height*0.9)
+                  + refB.position + tes3vector3.new(0,0,mB.height*0.9)) * 0.5
+        end
+    end
+    if spawnPos then
+    tes3.createVisualEffect{ object = VFXspark, repeatCount = 1, position = spawnPos }
+    end
+end
+
 -- Keyed by reference; contains the reference while that actor is mid-swing.
 -- Populated on `attack`, cleared on `attackHit` (or resetState).
 local activeWeaponTrackers = {}
+local onSimulate_collisionParry  -- forward declaration
 
-local function onSimulate_collisionParry()
+local function addWeaponTracker(ref)
+    if not next(activeWeaponTrackers) then
+        event.register(tes3.event.simulate, onSimulate_collisionParry)
+    end
+    activeWeaponTrackers[ref] = true
+end
+
+local function removeWeaponTracker(ref)
+    activeWeaponTrackers[ref] = nil
+    if not next(activeWeaponTrackers) then
+        event.unregister(tes3.event.simulate, onSimulate_collisionParry)
+    end
+end
+
+onSimulate_collisionParry = function()
     -- Need at least two actors swinging simultaneously
     local refs = {}
     for ref in pairs(activeWeaponTrackers) do refs[#refs + 1] = ref end
@@ -204,11 +267,8 @@ local function onSimulate_collisionParry()
             if dist < config.parry_collision_threshold then
                 log:debug("Collision parry triggered: %s vs %s at dist=%.1f", refA.id, refB.id, dist)
 
-                -- Sparks at the midpoint
-                local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
-                if VFXspark then
-                    tes3.createVisualEffect{ object = VFXspark, repeatCount = 1, position = mid }
-                end
+                -- Spawn sparks at the collision point (frustum-checked; falls back to height-midpoint)
+                spawnParryVFX(mid, true, refA, refB)
 
                 -- Activate parry flags for both sides
                 mechanics.parry.collisionMid = mid  -- consumed by attackHitCallback for VFX placement
@@ -221,8 +281,8 @@ local function onSimulate_collisionParry()
                 end
 
                 -- Remove both from tracking so this pair cannot re-trigger
-                activeWeaponTrackers[refA] = nil
-                activeWeaponTrackers[refB] = nil
+                removeWeaponTracker(refA)
+                removeWeaponTracker(refB)
                 return  -- refs table is now stale; let the next frame re-evaluate remaining pairs
             end
 
@@ -375,10 +435,7 @@ local function attackHitCallback(e)
 
     -- Collision mode: remove attacker from weapon tracking
     if activeWeaponTrackers[e.reference] then
-        activeWeaponTrackers[e.reference] = nil
-        if not next(activeWeaponTrackers) then
-            event.unregister(tes3.event.simulate, onSimulate_collisionParry)
-        end
+        removeWeaponTracker(e.reference)
     end
 
     if not e.targetReference or not e.targetMobile then
@@ -447,8 +504,7 @@ local function onAttack(e)
         -- Collision mode: track any armed attacker; compute per-frame segment distances
         local mob = e.reference.mobile
         if mob and mob.readiedWeapon then
-            activeWeaponTrackers[e.reference] = true
-            event.register(tes3.event.simulate, onSimulate_collisionParry)
+            addWeaponTracker(e.reference)
             log:debug("Collision tracking started for %s", e.reference.id)
         end
     elseif config.parry_enabled and not config.parry_collision_mode then

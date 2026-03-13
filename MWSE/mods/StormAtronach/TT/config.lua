@@ -83,8 +83,10 @@ local default_config = {
     -- Collision parry
     parry_collision_mode       = false,  -- use weapon-segment collision to trigger parry (both actors must be swinging)
     parry_collision_threshold  = 10,     -- game units; weapon segments closer than this trigger collision
+    parry_collision_vfx_at_point = false, -- spawn sparks at the collision point (frustum-checked); false = always use height-midpoint
     -- Debug
     parry_debug_always_active = false,  -- keep parry window open indefinitely (testing only)
+    parry_debug_collision_sphere = false, -- show a sphere at the weapon collision midpoint for debugging
     -- Parry fatigue drain: attacker loses fatigue scaled to the skill-gap outcome
     parry_fatigue_drain_enabled = true,
     parry_fatigue_drain_neg = 10,  -- attacker dominated (outcome < 0)

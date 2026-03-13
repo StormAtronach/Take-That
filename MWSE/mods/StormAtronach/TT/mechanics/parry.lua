@@ -294,14 +294,14 @@ function parry.attackHitCallback(e)
     local a  = e.mobile
     local tr = e.targetReference
     local t  = e.targetMobile
-    -- VFX: collision mode already fired sparks at detection time; just consume the stored position.
-    -- Standard mode places sparks at the height-midpoint between the two actors.
-    local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
-    if config.parry_collision_mode then
-        parry.collisionMid = nil
-    elseif VFXspark then
-        local vfxPos = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2
-        tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = vfxPos}
+    -- VFX: collision mode fires sparks at detection time (main.lua); standard mode uses height-midpoint.
+    parry.collisionMid = nil  -- consume stored position regardless
+    if not config.parry_collision_mode then
+        local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
+        if VFXspark then
+            local vfxPos = (ar.position + tes3vector3.new(0,0,a.height*0.9) + tr.position + tes3vector3.new(0,0,t.height*0.9)) / 2
+            tes3.createVisualEffect{object = VFXspark, repeatCount = 1, position = vfxPos}
+        end
     end
 
 

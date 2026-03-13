@@ -107,6 +107,11 @@ local function registerModConfig()
         configKey = "parry_collision_mode",
     }
     page:createOnOffButton{
+        label = "Collision Parry: Sparks at Collision Point",
+        description = "When enabled, the parry spark VFX appears at the actual weapon collision point (frustum-checked; falls back to height-midpoint if off-screen). When disabled, sparks always appear at the height-midpoint between the two actors.",
+        configKey = "parry_collision_vfx_at_point",
+    }
+    page:createOnOffButton{
         label = "Enable Dodge",
         description = "Toggle the dodge mechanic on or off.",
         configKey = "dodge_enabled",
@@ -442,6 +447,11 @@ local function registerModConfig()
         label = "Parry Always Active",
         description = "DEBUG: Once triggered by a swing, the player's parry window never closes. Useful for testing parry outcomes without precise timing.",
         configKey = "parry_debug_always_active",
+    }
+    parryDebug:createOnOffButton{
+        label = "Show Collision Sphere",
+        description = "DEBUG: Spawns a sphere at the weapon collision midpoint each time a collision parry fires. Visible for 2 seconds.",
+        configKey = "parry_debug_collision_sphere",
     }
 
     local gmstCategory = balancing:createCategory{ label = "Fatigue GMSTs" }
