@@ -86,7 +86,7 @@ local default_config = {
     parry_collision_vfx_at_point = false, -- spawn sparks at the collision point (frustum-checked); false = always use height-midpoint
     -- Debug
     parry_debug_always_active = false,  -- keep parry window open indefinitely (testing only)
-    parry_debug_collision_sphere = false, -- show a sphere at the weapon collision midpoint for debugging
+    parry_debug_mode = false, -- show weapon segment lines and collision sphere each frame (collision mode only)
     -- Parry fatigue drain: attacker loses fatigue scaled to the skill-gap outcome
     parry_fatigue_drain_enabled = true,
     parry_fatigue_drain_neg = 10,  -- attacker dominated (outcome < 0)

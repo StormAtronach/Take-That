@@ -160,6 +160,55 @@ local function segSegDist(a1, a2, b1, b2)
     return pa:distance(pb), (pa + pb) * 0.5
 end
 
+-- Draws or updates a persistent debug line by name. Passing the same name on subsequent calls
+-- updates the existing node in-place. Passing a new name creates a fresh clone.
+-- `tes3.loadMesh(..., false)` bypasses the cache so each clone gets independent NiLinesData.
+-- r/g/b are 0-255.
+local function drawDebugLine(name, origin, destination, r, g, b)
+    local root = tes3.worldController.vfxManager.worldVFXRoot
+    local line = root:getObjectByName(name) --[[@as niTriShape?]]
+    if line == nil then
+        line = tes3.loadMesh("mwse\\widgets.nif", false)
+            :getObjectByName("axisLines")
+            :getObjectByName("z")
+            :clone() --[[@as niTriShape]]
+        line.name = name
+        root:attachChild(line, true)
+    end
+    do
+        line.data.vertices[1] = origin
+        line.data.vertices[2] = destination
+        line.data.colors[1]   = niPackedColor.new(r, g, b)
+        line.data.colors[2]   = niPackedColor.new(r, g, b)
+        line.data:markAsChanged()
+        line.data:updateModelBound()
+    end
+    line:update()
+    line:updateEffects()
+    line:updateProperties()
+end
+
+-- Spawns a trail-line snapshot that stays visible for `duration` seconds then detaches.
+-- Throttled to one new snapshot per `label` per 0.1s.
+local trailLineCounters = {}  ---@type table<string, number>
+local trailLineLastTime = {}  ---@type table<string, number>
+local function spawnTrailLine(origin, destination, r, g, b, label, duration)
+    local now = os.clock()
+    if (trailLineLastTime[label] or 0) + 0.025 > now then return end
+    trailLineLastTime[label] = now
+    trailLineCounters[label] = (trailLineCounters[label] or 0) + 1
+    local name = "TT_trail_" .. label .. "_" .. trailLineCounters[label]
+    drawDebugLine(name, origin, destination, r, g, b)
+    local root = tes3.worldController.vfxManager.worldVFXRoot
+    local line = root:getObjectByName(name) --[[@as niTriShape?]]
+    if line then
+        timer.start({ duration = duration, callback = function()
+            root:detachChild(line)
+            root:update()
+        end })
+    end
+end
+
 -- Spawns a debug sphere at `pos` for 2 seconds using the mwse widgets.nif unitSphere.
 -- Reuses the same scene node across calls (identified by name "TT_collision_sphere").
 local function spawnDebugSphere(pos)
@@ -186,25 +235,38 @@ end
 -- checkFrustum is true, tries to spawn at `pos` (frustum-checked). Falls back to the
 -- height-midpoint between refA and refB in all other cases.
 local function spawnParryVFX(pos, checkFrustum, refA, refB)
+    log:debug("spawnParryVFX called: checkFrustum=%s vfx_at_point=%s", tostring(checkFrustum), tostring(config.parry_collision_vfx_at_point))
     local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
-    if not VFXspark then return end
+    if not VFXspark then
+        log:warn("spawnParryVFX: AXE_sa_VFX_WSparks not found — no VFX spawned")
+        return
+    end
     local spawnPos
     if checkFrustum and config.parry_collision_vfx_at_point then
         local camera = tes3.worldController.worldCamera.cameraData.camera
         ---@diagnostic disable-next-line: undefined-field
         if camera:worldPointToScreenPoint(pos) then
             spawnPos = pos
+            log:debug("spawnParryVFX: using collision point (in frustum)")
+        else
+            log:debug("spawnParryVFX: collision point outside frustum, falling back")
         end
     end
     if not spawnPos then
         local mA, mB = refA.mobile, refB.mobile
         if mA and mB then
-        spawnPos = (refA.position + tes3vector3.new(0,0,mA.height*0.9)
-                  + refB.position + tes3vector3.new(0,0,mB.height*0.9)) * 0.5
+            spawnPos = (refA.position + tes3vector3.new(0,0,mA.height*0.9)
+                      + refB.position + tes3vector3.new(0,0,mB.height*0.9)) * 0.5
+            log:debug("spawnParryVFX: using height-midpoint fallback")
+        else
+            log:warn("spawnParryVFX: mobile nil (mA=%s mB=%s) — no VFX spawned", tostring(mA), tostring(mB))
         end
     end
     if spawnPos then
-    tes3.createVisualEffect{ object = VFXspark, repeatCount = 1, position = spawnPos }
+        log:debug("spawnParryVFX: spawning VFX at %s  player at %s", tostring(spawnPos), tostring(tes3.player.position))
+        tes3.createVisualEffect{ object = VFXspark,repeatCount = 1, position = spawnPos }
+    else
+        log:warn("spawnParryVFX: spawnPos is nil — no VFX spawned")
     end
 end
 
@@ -264,11 +326,18 @@ onSimulate_collisionParry = function()
             local dist, mid = segSegDist(posA, tipA, posB, tipB)
             log:debug("Collision probe: %s vs %s  dist=%.1f", refA.id, refB.id, dist)
 
+            if config.parry_debug_mode then
+                -- red = refA weapon, green = refB weapon
+                spawnTrailLine(posA, tipA, 255, 0,   0, "A", 2.0)
+                spawnTrailLine(posB, tipB, 0,   255, 0, "B", 2.0)
+            end
+
             if dist < config.parry_collision_threshold then
                 log:debug("Collision parry triggered: %s vs %s at dist=%.1f", refA.id, refB.id, dist)
 
                 -- Spawn sparks at the collision point (frustum-checked; falls back to height-midpoint)
                 spawnParryVFX(mid, true, refA, refB)
+                if config.parry_debug_mode then spawnDebugSphere(mid) end
 
                 -- Activate parry flags for both sides
                 mechanics.parry.collisionMid = mid  -- consumed by attackHitCallback for VFX placement
@@ -466,9 +535,19 @@ local function attackHitCallback(e)
         end
 
         -- Parry stream: defender must have an active parry flag; NPC-as-defender requires enemy_parry_active
+        log:debug("attackHit parry check: attacker=%s target=%s parryFlag=%s",
+            ID, e.targetReference.id, tostring(common.parryingActors[e.targetReference]))
         if config.parry_enabled and common.parryingActors[e.targetReference] then
             if e.targetReference == tes3.player or config.enemy_parry_active then
+                log:debug("attackHit: parry firing for defender=%s", e.targetReference.id)
                 mechanics.parry.attackHitCallback(e)
+            else
+                log:debug("attackHit: parry flag set but enemy_parry_active=false, skipping NPC defender")
+            end
+            -- Consume the defender's flag. In collision mode the flag is set by spatial detection
+            -- so always clear it — always_active only applies to standard (swing-window) mode.
+            if not (e.targetReference == tes3.player and config.parry_debug_always_active and not config.parry_collision_mode) then
+                common.parryingActors[e.targetReference] = nil
             end
         end
 

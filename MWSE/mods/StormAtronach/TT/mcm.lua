@@ -449,9 +449,9 @@ local function registerModConfig()
         configKey = "parry_debug_always_active",
     }
     parryDebug:createOnOffButton{
-        label = "Show Collision Sphere",
-        description = "DEBUG: Spawns a sphere at the weapon collision midpoint each time a collision parry fires. Visible for 2 seconds.",
-        configKey = "parry_debug_collision_sphere",
+        label = "Parry Debug Mode",
+        description = "DEBUG: Each frame, draws red/green lines along both weapon segments and spawns a sphere at the collision midpoint when a collision parry fires. Collision mode only.",
+        configKey = "parry_debug_mode",
     }
 
     local gmstCategory = balancing:createCategory{ label = "Fatigue GMSTs" }

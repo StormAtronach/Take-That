@@ -147,7 +147,7 @@ end
 
 --- @param e attackHitEventData
 function parry.attackHitCallback(e)
-    log:trace("Parry attackHit event started")
+    log:debug("Parry attackHit event started: attacker=%s defender=%s", e.reference.id, e.targetReference.id)
 
     -- Guard: only parry attacks between actors who are in combat with each other.
     -- Prevents parrying stray hits from actors fighting someone else.
