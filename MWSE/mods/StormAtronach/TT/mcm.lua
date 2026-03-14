@@ -480,21 +480,13 @@ local function registerModConfig()
 	}) --[[@as mwseMCMSideBarPage]]
 	createSidebar(gmstPage)
 
-	-- Forward declarations so button callbacks can call forceSliderValue() after the sliders exist.
+	-- Forward declarations so button callbacks can call setVariableValue() after the sliders exist.
 	local sliderReturnBase, sliderReturnMult, sliderAttackBase ---@type mwseMCMSlider, mwseMCMSlider, mwseMCMSlider
-	--- Forces a MCM slider widget to display `value`, bypassing the broken :update() path.
-	--- widget.current is an integer from 0 to widget.max, scaled by 10^decimalPlaces.
-	local function forceSliderValue(slider, value)
-		local w = slider.elements.slider.widget
-		w.current = math.round((value - slider.min) / (slider.max - slider.min) * w.max)
-		slider.elements.slider:updateLayout()
-		slider:updateValueLabel()
-	end
 
 	local function refreshGmstSliders()
-		if sliderReturnBase then forceSliderValue(sliderReturnBase, config.fatigueReturnBase) end
-		if sliderReturnMult  then forceSliderValue(sliderReturnMult,  config.fatigueReturnMult)  end
-		if sliderAttackBase  then forceSliderValue(sliderAttackBase,  config.fatigueAttackBase)  end
+		if sliderReturnBase then sliderReturnBase:setVariableValue(config.fatigueReturnBase) end
+		if sliderReturnMult  then sliderReturnMult:setVariableValue(config.fatigueReturnMult)   end
+		if sliderAttackBase  then sliderAttackBase:setVariableValue(config.fatigueAttackBase)   end
 	end
 
 	gmstPage:createOnOffButton{
