@@ -485,8 +485,8 @@ local function registerModConfig()
 
 	local function refreshGmstSliders()
 		if sliderReturnBase then sliderReturnBase:setVariableValue(config.fatigueReturnBase) end
-		if sliderReturnMult  then sliderReturnMult:setVariableValue(config.fatigueReturnMult)   end
-		if sliderAttackBase  then sliderAttackBase:setVariableValue(config.fatigueAttackBase)   end
+		if sliderReturnMult then sliderReturnMult:setVariableValue(config.fatigueReturnMult) end
+		if sliderAttackBase then sliderAttackBase:setVariableValue(config.fatigueAttackBase) end
 	end
 
 	gmstPage:createOnOffButton{
