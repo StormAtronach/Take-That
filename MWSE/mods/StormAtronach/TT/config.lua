@@ -1,6 +1,6 @@
 -- Set up the configuration
 local default_config = {
-    log_level               = mwse.logLevel.info,
+    log_level               = mwse.logLevel.error,
     enabled                 = true,
     block_enabled           = true,
     parry_enabled           = true,
@@ -9,8 +9,8 @@ local default_config = {
     name                    = "Take That",
     hotkey                  = {keyCode = tes3.scanCode.b},
     parrySlowDown           = false,
-    damageMultiplierPlayer  = true,
-    damageMultiplierNPC     = true,
+    damageMultiplierPlayer  = false,
+    damageMultiplierNPC     = false,
     damageMultiplier        = 1.5,
     hitChanceModPlayer      = false,
     hitChanceModNPC         = false,
@@ -21,7 +21,7 @@ local default_config = {
     block_fatigue_cost      = 25.0, -- fatigue drained per second while holding block
     parry_min_swing          = 0,
     bat_min_skill           = 25,
-    bat_range               = 160, -- Player batting search radius (game units)
+    bat_range               = 250, -- Player batting search radius (game units)
     -- NPC spell batting
     npc_spellbat_enabled    = true,
     npc_spellbat_chance     = 60,  -- flat % chance per projectile cast
@@ -30,8 +30,8 @@ local default_config = {
     block_weapon_base_pc    = 20,
     block_weapon_skill_mult = 0.6,
     -- NPC parry
-    enemy_parry_active      = false,
-    enemy_min_attackSwing   = 0.75,
+    enemy_parry_active      = true,
+    enemy_min_attackSwing   = 0.5,
     -- Force counter: auto-release the player's charged attack when an NPC starts attacking them
     force_counter_enabled   = false,
     force_counter_cooldown  = 1.0,
@@ -50,7 +50,7 @@ local default_config = {
     -- Parry slow-mo
     parry_slowmo_enabled    = false,
     parry_slowmo_duration   = 0.25, -- real-time seconds the slow-mo lasts
-    parry_slowmo_scalar     = 0.3,  -- simulationTimeScalar during slow-mo (0.3 = 30% speed)
+    parry_slowmo_scalar     = 0.5,  -- simulationTimeScalar during slow-mo (0.3 = 30% speed)
     parry_slowmo_ramp_time  = 0.1,  -- real-time seconds for ease-in and ease-out transition
     allow_vanilla_block = true,
     -- Momentum: master toggle
@@ -61,12 +61,12 @@ local default_config = {
     fatigueAttackBase           = 4.0,
     -- Momentum: fatigue scalar
     fatigueExponent             = 0.4,
-    fatigueSpeedFloor           = 0.60,
+    fatigueSpeedFloor           = 0.3,
     -- Momentum: weight scalar
-    referenceStrength           = 50,
+    referenceStrength           = 75,
     strengthFloor               = 0.35,
     strengthCeiling             = 1.5,
-    weightPenaltyStrength       = 0.30,
+    weightPenaltyStrength       = 0.8,
     maxWeaponWeight             = 60.0,
     -- Momentum: recovery phase
     recoveryMinDuration         = 0.4,
@@ -74,26 +74,26 @@ local default_config = {
     recoverySpeedMin            = 0.50,
     recoveryEaseExp             = 2.0,
     -- Momentum: global floor
-    absoluteSpeedFloor          = 0.35,
+    absoluteSpeedFloor          = 0.3,
     -- NPC visual reactions (dodge/parry animations on miss)
     npc_dodge_enabled           = true,
     npc_react_use_weapon_anims  = false,
     -- Parry weapon damage: both weapons take condition damage on a successful parry,
     -- scaled as a fraction of the physical damage the attacker would have dealt.
-    parry_weapon_damage_enabled            = false,
+    parry_weapon_damage_enabled            = true,
     parry_weapon_damage_fraction_attacker  = 0.25,  -- fraction of blocked damage lost by attacker's weapon
     parry_weapon_damage_fraction_defender  = 0.10,  -- fraction of blocked damage lost by defender's weapon
     -- Collision parry
     parry_collision_mode       = false,  -- use weapon-segment collision to trigger parry (both actors must be swinging)
-    parry_collision_threshold  = 10,     -- game units; weapon segments closer than this trigger collision
-    parry_collision_vfx_at_point = false, -- spawn sparks at the collision point (frustum-checked); false = always use height-midpoint
+    parry_collision_threshold  = 30,     -- game units; weapon segments closer than this trigger collision
+    parry_collision_vfx_at_point = true, -- spawn sparks at the collision point (frustum-checked); false = always use height-midpoint
     -- Debug
     parry_debug_always_active = false,  -- keep parry window open indefinitely (testing only)
     parry_debug_mode = false, -- show weapon segment lines and collision sphere each frame (collision mode only)
     -- Parry fatigue drain: attacker loses fatigue scaled to the skill-gap outcome
     parry_fatigue_drain_enabled = true,
-    parry_fatigue_drain_neg = 10,  -- attacker dominated (outcome < 0)
-    parry_fatigue_drain_0   = 20,  -- evenly matched
+    parry_fatigue_drain_neg = 20,  -- attacker dominated (outcome < 0)
+    parry_fatigue_drain_0   = 25,  -- evenly matched
     parry_fatigue_drain_1   = 28,  -- defender +1 tier advantage
     parry_fatigue_drain_2   = 38,  -- defender +2 tier advantage
     parry_fatigue_drain_3   = 50,  -- defender +3 tier advantage (decisive)

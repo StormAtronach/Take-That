@@ -230,17 +230,25 @@ local function registerModConfig()
 		configKey = "parry_collision_threshold",
 	}
 
+	local parryMinSwing = parrySettings:createCategory{ label = "Minimum Swing" }
+	parryMinSwing:createSlider{
+		label = "Player Minimum Swing",
+		description = "The minimum charge the player must have on their swing to be eligible to parry. 0 allows parrying from any swing state.",
+		min = 0.0, max = 1.0, step = 0.1, jump = 0.1, decimalPlaces = 1,
+		configKey = "parry_min_swing",
+	}
+	parryMinSwing:createSlider{
+		label = "NPC Minimum Swing",
+		description = "The minimum swing that the NPC will need to achieve to parry your attack. NPC swing is randomized by the game engine.",
+		min = 0.0, max = 1.0, step = 0.1, jump = 0.1, decimalPlaces = 1,
+		configKey = "enemy_min_attackSwing",
+	}
+
 	local parryNPC = parrySettings:createCategory{ label = "NPC Parry" }
 	parryNPC:createOnOffButton{
 		label = "NPC Parry Active",
 		description = "If this is enabled, NPCs will be able to parry your attacks.",
 		configKey = "enemy_parry_active",
-	}
-	parryNPC:createSlider{
-		label = "NPC Minimum Swing for Parry",
-		description = "The minimum swing that the NPC will need to achieve to parry your attack. NPC swing is randomized by the game engine.",
-		min = 0.1, max = 1, step = 0.1, jump = 0.1, decimalPlaces = 1,
-		configKey = "enemy_min_attackSwing",
 	}
 
 	local forceCounter = parrySettings:createCategory{ label = "Force Counter Attack" }
