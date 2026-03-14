@@ -1,4 +1,5 @@
 local config = require("StormAtronach.TT.config")
+local gmst   = require("StormAtronach.TT.lib.gmst")
 
 local function modActivation()
     event.trigger("stormatronach:modActivation")
@@ -470,23 +471,76 @@ local function registerModConfig()
 		configKey = "hitChanceMultiplier",
 	}
 
-	local gmstCategory = balancing:createCategory{ label = "Fatigue GMSTs" }
-	gmstCategory:createSlider{
+	-- -------------------------------------------------------------------------
+	-- Fatigue GMSTs
+	-- -------------------------------------------------------------------------
+	local gmstPage = template:createSideBarPage({
+		label = "Fatigue GMSTs",
+		showReset = true,
+	}) --[[@as mwseMCMSideBarPage]]
+	createSidebar(gmstPage)
+
+	-- Forward declarations so button callbacks can call forceSliderValue() after the sliders exist.
+	local sliderReturnBase, sliderReturnMult, sliderAttackBase ---@type mwseMCMSlider, mwseMCMSlider, mwseMCMSlider
+	--- Forces a MCM slider widget to display `value`, bypassing the broken :update() path.
+	--- widget.current is an integer from 0 to widget.max, scaled by 10^decimalPlaces.
+	local function forceSliderValue(slider, value)
+		local w = slider.elements.slider.widget
+		w.current = math.round((value - slider.min) / (slider.max - slider.min) * w.max)
+		slider.elements.slider:updateLayout()
+		slider:updateValueLabel()
+	end
+
+	local function refreshGmstSliders()
+		if sliderReturnBase then forceSliderValue(sliderReturnBase, config.fatigueReturnBase) end
+		if sliderReturnMult  then forceSliderValue(sliderReturnMult,  config.fatigueReturnMult)  end
+		if sliderAttackBase  then forceSliderValue(sliderAttackBase,  config.fatigueAttackBase)  end
+	end
+
+	gmstPage:createOnOffButton{
+		label = "Enable GMST Overrides",
+		description = "When enabled, Take That! overwrites the following GMST fFatigueReturnBase, fFatigueReturnMult, and fFatigueAttackBase with the values configured below. Opt-in: disabled by default to avoid conflicts.",
+		configKey = "gmst_enabled",
+		callback = function()
+			if config.gmst_enabled then
+				gmst.apply()
+			else
+				gmst.restoreVanilla()
+			end
+		end,
+	}
+	gmstPage:createButton{
+		buttonText = "Restore vanilla GMSTs",
+		description = "Writes the values of fFatigueReturnBase, fFatigueReturnMult, and fFatigueAttackBase that were active when the game was loaded (before any Take That! changes) back to the engine.",
+		callback = function()
+			gmst.restoreVanilla()
+			refreshGmstSliders()
+		end,
+	}
+	gmstPage:createButton{
+		buttonText = "Restore mod default GMSTs",
+		description = "Writes Take That!'s recommended default values for fFatigueReturnBase, fFatigueReturnMult, and fFatigueAttackBase back to the engine.",
+		callback = function()
+			gmst.restoreDefaults()
+			refreshGmstSliders()
+		end,
+	}
+	sliderReturnBase = gmstPage:createSlider{
 		label = "Fatigue Return Base",
-		description = "GMST: Base rate at which fatigue recovers. Higher values restore fatigue faster.",
-		min = 0.1, max = 2.0, step = 0.05, jump = 0.1, decimalPlaces = 2,
+		description = "GMST: Base rate at which fatigue recovers. Higher values restore fatigue faster. Vanilla default is 2.50.",
+		min = 0.0, max = 5.0, step = 0.05, jump = 0.5, decimalPlaces = 2,
 		configKey = "fatigueReturnBase",
 	}
-	gmstCategory:createSlider{
+	sliderReturnMult = gmstPage:createSlider{
 		label = "Fatigue Return Multiplier",
-		description = "GMST: Multiplier applied on top of the base fatigue recovery rate.",
-		min = 0.0, max = 1.0, step = 0.05, jump = 0.1, decimalPlaces = 2,
+		description = "GMST: Multiplier applied on top of the base fatigue recovery rate. Vanilla default is 0.02.",
+		min = 0.0, max = 1.0, step = 0.01, jump = 0.1, decimalPlaces = 2,
 		configKey = "fatigueReturnMult",
 	}
-	gmstCategory:createSlider{
+	sliderAttackBase = gmstPage:createSlider{
 		label = "Fatigue Attack Base",
-		description = "GMST: Base fatigue cost per attack.",
-		min = 0.0, max = 10.0, step = 0.1, jump = 0.5, decimalPlaces = 1,
+		description = "GMST: Base fatigue cost per attack. Vanilla default is 2.0.",
+		min = 0.0, max = 20.0, step = 0.1, jump = 1.0, decimalPlaces = 1,
 		configKey = "fatigueAttackBase",
 	}
 

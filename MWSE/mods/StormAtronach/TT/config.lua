@@ -56,6 +56,7 @@ local default_config = {
     -- Momentum: master toggle
     momentum_enabled            = true,
     -- Momentum: GMST overrides
+    gmst_enabled                = false,
     fatigueReturnBase           = 0.85,
     fatigueReturnMult           = 0.30,
     fatigueAttackBase           = 4.0,

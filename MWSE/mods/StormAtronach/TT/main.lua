@@ -777,8 +777,11 @@ end
 
 event.register(tes3.event.loaded, deactivate)
 event.register(tes3.event.loaded, resetState)
+event.register(tes3.event.initialized, function()
+    gmst.captureVanilla()
+end)
 event.register(tes3.event.loaded, function()
-    if config.momentum_enabled then gmst.apply() end
+    if config.gmst_enabled then gmst.apply() end
 end)
 event.register(tes3.event.initialized, initialized)
 event.register("stormatronach:modActivation", modActivation)
