@@ -24,6 +24,53 @@ local config  = require("StormAtronach.TT.config")
 local sounds  = require("StormAtronach.TT.lib.sounds")
 local log     = mwse.Logger.new({ moduleName = "npcDodge" })
 
+-- ── Dodge animation compatibility results ─────────────────────────────────────
+-- Loaded from the test results: { [meshName] = 0|1|2 }  (0=ok, 1=partial, 2=notok)
+-- Only present for creatures; if a mesh name is absent the animation is blocked.
+local dodgeResults = json.loadfile("mods\\StormAtronach\\TT\\lib\\dodgeAnimResults") or {}
+log:debug("dodgeResults: loaded %d entries", #table.keys(dodgeResults))
+
+local function meshName(path)
+    if not path then return nil end
+    local name = path:match("[/\\]([^/\\]+)%.nif$") or path:match("^([^/\\]+)%.nif$")
+    return name and name:lower()
+end
+
+local dodgeAllowedCache = setmetatable({}, { __mode = "k" })  -- weak keys: refs not kept alive
+
+--- Returns true if the dodge animation should be played on this reference.
+--- For creatures with a result of 1 or 2 in dodgeResults the animation is skipped.
+--- Non-creatures and untested creatures are always allowed.
+--- Result is cached per reference to avoid repeated table lookups.
+local function dodgeAnimAllowed(ref)
+    if dodgeAllowedCache[ref] ~= nil then return dodgeAllowedCache[ref] end
+
+    local allowed
+    if ref.baseObject.objectType ~= tes3.objectType.creature then
+        allowed = true
+    else
+        local creature = ref.baseObject --[[@as tes3creature]]
+        local mn = meshName(creature.mesh)
+        if mn == nil then
+            log:debug("dodgeAnimAllowed: %s — no mesh path, blocking", ref.id)
+            allowed = false
+        else
+            local result = dodgeResults[mn]
+            if result == nil then
+                log:debug("dodgeAnimAllowed: %s (mesh=%s  full=%s) — untested, blocking", ref.id, mn, creature.mesh or "?")
+                allowed = false
+            else
+                allowed = (result == 0)
+                log:debug("dodgeAnimAllowed: %s (mesh=%s  full=%s) result=%d → %s",
+                    ref.id, mn, creature.mesh or "?", result, allowed and "ALLOW" or "SKIP")
+            end
+        end
+    end
+
+    dodgeAllowedCache[ref] = allowed
+    return allowed
+end
+
 local this = {}
 
 -- ── Animation source paths ────────────────────────────────────────────────────
@@ -237,8 +284,10 @@ local function dodgeOrHit(e)
         end
         sounds.playRandom("parry", e.target, 1)
     else
-        log:debug("dodgeOrHit: dodge — %s", dodgeMesh)
-        playAnim(e.target, dodgeMesh)
+        if dodgeAnimAllowed(e.target) then
+            log:debug("dodgeOrHit: dodge — %s", dodgeMesh)
+            playAnim(e.target, dodgeMesh)
+        end
     end
 end
 
