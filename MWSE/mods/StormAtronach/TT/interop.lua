@@ -1,11 +1,10 @@
---- Take That! — interop.lua
+--- Take That! - interop.lua
 --- Public API for other mods. Use include() to avoid hard dependency:
 ---   local TT = include("StormAtronach.TT.interop")
 ---   if TT then ... end
-
 local config = require("StormAtronach.TT.config")
 local common = require("StormAtronach.TT.lib.common")
-local parry  = require("StormAtronach.TT.mechanics.parry")
+local parry = require("StormAtronach.TT.mechanics.parry")
 
 local interop = {}
 
@@ -23,17 +22,17 @@ interop.parryingActors = common.parryingActors
 --- @param name string  "block" | "parry" | "dodge" | "spellbatting"
 --- @param enabled boolean
 function interop.setMechanicEnabled(name, enabled)
-    local key = name .. "_enabled"
-    assert(config[key] ~= nil, ("Take That interop: unknown mechanic '%s'"):format(name))
-    config[key] = enabled
-    event.trigger("stormatronach:modActivation")
+	local key = name .. "_enabled"
+	assert(config[key] ~= nil, ("Take That interop: unknown mechanic '%s'"):format(name))
+	config[key] = enabled
+	event.trigger("stormatronach:modActivation")
 end
 
 --- Returns whether a mechanic is currently enabled.
 --- @param name string
 --- @return boolean
 function interop.isMechanicEnabled(name)
-    return config[name .. "_enabled"] == true
+	return config[name .. "_enabled"] == true
 end
 
 return interop

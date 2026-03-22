@@ -1,5 +1,4 @@
--- common.lua — Shared utilities and cross-module state tables
-
+-- common.lua - Shared utilities and cross-module state tables
 local common = {}
 
 -- slowedActors: tracks actors currently under a TT slow effect.
@@ -34,76 +33,72 @@ local log = mwse.Logger.new({ moduleName = "common" })
 -- bolt	            13	    Bolts
 
 common.oneHandedWeaponTable = {
-       [tes3.weaponType.shortBladeOneHand]  = true,
-       [tes3.weaponType.longBladeOneHand]   = true,
-       [tes3.weaponType.longBladeTwoClose]  = false,
-       [tes3.weaponType.bluntOneHand]       = true,
-       [tes3.weaponType.bluntTwoClose]      = false,
-       [tes3.weaponType.bluntTwoWide]       = false,
-       [tes3.weaponType.spearTwoWide]       = false,
-       [tes3.weaponType.axeOneHand]         = true,
-       [tes3.weaponType.axeTwoHand]         = false,
-       [tes3.weaponType.marksmanBow]        = false,
-       [tes3.weaponType.marksmanCrossbow]   = false,
-       [tes3.weaponType.marksmanThrown]     = false,
-       [tes3.weaponType.arrow]              = false,
-       [tes3.weaponType.bolt]               = false,
-       ["kungFu"]                           = false,
-    }
+	[tes3.weaponType.shortBladeOneHand] = true,
+	[tes3.weaponType.longBladeOneHand] = true,
+	[tes3.weaponType.longBladeTwoClose] = false,
+	[tes3.weaponType.bluntOneHand] = true,
+	[tes3.weaponType.bluntTwoClose] = false,
+	[tes3.weaponType.bluntTwoWide] = false,
+	[tes3.weaponType.spearTwoWide] = false,
+	[tes3.weaponType.axeOneHand] = true,
+	[tes3.weaponType.axeTwoHand] = false,
+	[tes3.weaponType.marksmanBow] = false,
+	[tes3.weaponType.marksmanCrossbow] = false,
+	[tes3.weaponType.marksmanThrown] = false,
+	[tes3.weaponType.arrow] = false,
+	[tes3.weaponType.bolt] = false,
+	["kungFu"] = false,
+}
 
 --- Add or refresh a slow entry for an actor.
 --- Preserves the actor's current speedMultiplier as originalSpeed so the slow factor
 --- is applied multiplicatively rather than as an absolute value.
 --- If the actor is already slowed, the previous originalSpeed is carried forward.
 function common.slowActor(ref, duration, typeSlow)
-    local animCtrl    = ref.mobile and ref.mobile.animationController
-    local prevEntry   = common.slowedActors[ref]
-    local originalSpeed = (prevEntry and prevEntry.originalSpeed)
-                       or (animCtrl and animCtrl.speedMultiplier)
-                       or 1.0
-    common.slowedActors[ref] = {
-        startTime     = os.clock(),
-        duration      = duration,
-        typeSlow      = typeSlow,
-        originalSpeed = originalSpeed,
-    }
+	local animCtrl = ref.mobile and ref.mobile.animationController
+	local prevEntry = common.slowedActors[ref]
+	local originalSpeed = (prevEntry and prevEntry.originalSpeed) or (animCtrl and animCtrl.speedMultiplier) or 1.0
+	common.slowedActors[ref] = {
+		startTime = os.clock(),
+		duration = duration,
+		typeSlow = typeSlow,
+		originalSpeed = originalSpeed,
+	}
 end
 
 -- Roll a D20! Well, no, but the same thing. We check the skill level of the equipped weapon or hand to hand
 function common.weaponSkillCheck(data)
-    -- data.thisMobileActor     : Well, a mobileActor
-    -- data.weapon              : And its weapon. Hopefully, a tes3weapon.type. Should be nil if nothing is equipped.
-    -- data.valueToCheckAgainst : Pretty self explanatory. Optional
-    -- Look, an initialization! How rare to find one in the wild:
-    local skillLevel = 0
-    local skillDC    = data.valueToCheckAgainst or 0
-    local skillList = {
-       [tes3.weaponType.shortBladeOneHand]  = tes3.skill.shortBlade,
-       [tes3.weaponType.longBladeOneHand]   = tes3.skill.longBlade,
-       [tes3.weaponType.longBladeTwoClose]  = tes3.skill.longBlade,
-       [tes3.weaponType.bluntOneHand]       = tes3.skill.bluntWeapon,
-       [tes3.weaponType.bluntTwoClose]      = tes3.skill.bluntWeapon,
-       [tes3.weaponType.bluntTwoWide]       = tes3.skill.bluntWeapon,
-       [tes3.weaponType.spearTwoWide]       = tes3.skill.spear,
-       [tes3.weaponType.axeOneHand]         = tes3.skill.axe,
-       [tes3.weaponType.axeTwoHand]         = tes3.skill.axe,
-       [tes3.weaponType.marksmanBow]        = tes3.skill.handToHand,
-       [tes3.weaponType.marksmanCrossbow]   = tes3.skill.handToHand,
-       [tes3.weaponType.marksmanThrown]     = tes3.skill.handToHand,
-       [tes3.weaponType.arrow]              = tes3.skill.handToHand,
-       [tes3.weaponType.bolt]               = tes3.skill.handToHand,
-       ["kungFu"]                           = tes3.skill.handToHand,
-    }
-    local weaponType = data.weapon or "kungFu"
-    local skillID    = skillList[weaponType] or tes3.skill.handToHand
-    skillLevel = data.thisMobileActor:getSkillValue(skillID)
-    log:trace("Executed weapon skill check: Skill %s, skillDC %s", skillLevel, skillDC)
+	-- data.thisMobileActor     : Well, a mobileActor
+	-- data.weapon              : And its weapon. Hopefully, a tes3weapon.type. Should be nil if nothing is equipped.
+	-- data.valueToCheckAgainst : Pretty self explanatory. Optional
+	-- Look, an initialization! How rare to find one in the wild:
+	local skillLevel = 0
+	local skillDC = data.valueToCheckAgainst or 0
+	local skillList = {
+		[tes3.weaponType.shortBladeOneHand] = tes3.skill.shortBlade,
+		[tes3.weaponType.longBladeOneHand] = tes3.skill.longBlade,
+		[tes3.weaponType.longBladeTwoClose] = tes3.skill.longBlade,
+		[tes3.weaponType.bluntOneHand] = tes3.skill.bluntWeapon,
+		[tes3.weaponType.bluntTwoClose] = tes3.skill.bluntWeapon,
+		[tes3.weaponType.bluntTwoWide] = tes3.skill.bluntWeapon,
+		[tes3.weaponType.spearTwoWide] = tes3.skill.spear,
+		[tes3.weaponType.axeOneHand] = tes3.skill.axe,
+		[tes3.weaponType.axeTwoHand] = tes3.skill.axe,
+		[tes3.weaponType.marksmanBow] = tes3.skill.handToHand,
+		[tes3.weaponType.marksmanCrossbow] = tes3.skill.handToHand,
+		[tes3.weaponType.marksmanThrown] = tes3.skill.handToHand,
+		[tes3.weaponType.arrow] = tes3.skill.handToHand,
+		[tes3.weaponType.bolt] = tes3.skill.handToHand,
+		["kungFu"] = tes3.skill.handToHand,
+	}
+	local weaponType = data.weapon or "kungFu"
+	local skillID = skillList[weaponType] or tes3.skill.handToHand
+	skillLevel = data.thisMobileActor:getSkillValue(skillID)
+	log:trace("Executed weapon skill check: Skill %s, skillDC %s", skillLevel, skillDC)
 
-    local output = {weaponSkill = skillLevel, check = skillLevel >= skillDC, skillID = skillID}
+	local output = { weaponSkill = skillLevel, check = skillLevel >= skillDC, skillID = skillID }
 
-    return output
+	return output
 end
-
-
 
 return common
