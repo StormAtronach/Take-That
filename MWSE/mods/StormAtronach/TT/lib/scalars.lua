@@ -3,7 +3,7 @@
 -- composite() multiplies three independent scalars:
 --   fatigueScalar  : ratio of current/max fatigue raised to a configurable exponent.
 --                    A drained actor moves noticeably slower; full fatigue = 1.0.
---   weightScalar   : precomputed per-actor in actorState.updateWeightScalar().
+--   weightScalar   : precomputed per-actor in momentum.updateWeightScalar().
 --                    Heavy weapons relative to strength reduce this below 1.0.
 --   recoveryScalar : ease-out curve during the post-attack recovery window.
 --                    Peaks right after a swing, then eases back to 1.0.

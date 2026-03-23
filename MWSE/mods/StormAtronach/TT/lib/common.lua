@@ -50,6 +50,37 @@ common.oneHandedWeaponTable = {
 	["kungFu"] = false,
 }
 
+--- Ranged weapon type lookup. True for any weapon that fires a projectile.
+--- Used by parry and any other mechanic that needs to distinguish melee from ranged.
+common.rangedWeaponTypes = {
+	[tes3.weaponType.marksmanBow]      = true,
+	[tes3.weaponType.marksmanCrossbow] = true,
+	[tes3.weaponType.marksmanThrown]   = true,
+}
+
+--- Extract the bare filename (no extension, lowercased) from a mesh path.
+--- Returns nil if path is nil or no filename component is found.
+--- Examples: "r\\meshes\\goblin.nif" → "goblin", "goblin.nif" → "goblin"
+function common.meshName(path)
+	if not path then
+		return nil
+	end
+	local name = path:match("[/\\]([^/\\]+)%.nif$") or path:match("^([^/\\]+)%.nif$")
+	return name and name:lower()
+end
+
+--- Midpoint between two actors at 90 % of their respective heights.
+--- Used for VFX spawn positions.
+--- @param refA tes3reference
+--- @param mobileA tes3mobileActor
+--- @param refB tes3reference
+--- @param mobileB tes3mobileActor
+--- @return tes3vector3
+function common.actorMidpoint(refA, mobileA, refB, mobileB)
+	return (refA.position + tes3vector3.new(0, 0, mobileA.height * 0.9) +
+	        refB.position + tes3vector3.new(0, 0, mobileB.height * 0.9)) * 0.5
+end
+
 --- Add or refresh a slow entry for an actor.
 --- Preserves the actor's current speedMultiplier as originalSpeed so the slow factor
 --- is applied multiplicatively rather than as an absolute value.

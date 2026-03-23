@@ -2,7 +2,7 @@
 -- Entry point: wires all events and orchestrates the block/parry/dodge/spellbatting mechanics.
 local common = require("StormAtronach.TT.lib.common")
 local config = require("StormAtronach.TT.config")
-local actorState = require("StormAtronach.TT.lib.actorState")
+local actorState = require("StormAtronach.TT.lib.momentum")
 local scalars = require("StormAtronach.TT.lib.scalars")
 local gmst = require("StormAtronach.TT.lib.gmst")
 local npcDodge = require("StormAtronach.TT.mechanics.npcDodge")
@@ -397,7 +397,7 @@ end
 local function spawnParryVFX(pos, checkFrustum, refA, refB)
 	log:debug("spawnParryVFX called: checkFrustum=%s vfx_at_point=%s", tostring(checkFrustum),
 	          tostring(config.parry_collision_vfx_at_point))
-	local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
+	VFXspark = VFXspark or tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3static]]
 	if not VFXspark then
 		log:warn("spawnParryVFX: AXE_sa_VFX_WSparks not found - no VFX spawned")
 		return
@@ -416,8 +416,7 @@ local function spawnParryVFX(pos, checkFrustum, refA, refB)
 	if not spawnPos then
 		local mA, mB = refA.mobile, refB.mobile
 		if mA and mB then
-			spawnPos = (refA.position + tes3vector3.new(0, 0, mA.height * 0.9) + refB.position +
-			           tes3vector3.new(0, 0, mB.height * 0.9)) * 0.5
+			spawnPos = common.actorMidpoint(refA, mA, refB, mB)
 			log:debug("spawnParryVFX: using height-midpoint fallback")
 		else
 			log:warn("spawnParryVFX: mobile nil (mA=%s mB=%s) - no VFX spawned", tostring(mA), tostring(mB))
@@ -430,6 +429,9 @@ local function spawnParryVFX(pos, checkFrustum, refA, refB)
 		log:warn("spawnParryVFX: spawnPos is nil - no VFX spawned")
 	end
 end
+
+-- Cached VFX object for parry sparks — created in initialized(), looked up lazily.
+local VFXspark = nil ---@type tes3static?
 
 -- Keyed by reference; contains the reference while that actor is mid-swing.
 -- Populated on `attack`, cleared on `attackHit` (or resetState).
@@ -605,28 +607,11 @@ local function onMobileDeactivated(e)
 	log:debug("Momentum state removed for %s", e.mobile.reference.id)
 end
 
-local function onEquip(e)
-	log:debug("Equip on %s - scheduling weight scalar update", e.reference.id)
+local function onEquipChange(e)
+	log:debug("Equip change on %s - scheduling weight scalar update", e.reference.id)
 	timer.delayOneFrame(function()
 		actorState.updateWeightScalar(e.reference)
 	end)
-end
-
-local function onUnequip(e)
-	log:debug("Unequip on %s - scheduling weight scalar update", e.reference.id)
-	timer.delayOneFrame(function()
-		actorState.updateWeightScalar(e.reference)
-	end)
-end
-
-local function onAttackStart_momentum(e)
-	local s = actorState.get(e.reference)
-	if not s then
-		return
-	end
-	s.inAttack = true
-	s.peakSwing = 0
-	log:debug("Attack swing started by %s", e.reference.id)
 end
 
 -- On the simulate event, apply momentum scalars and manage the slow table
@@ -751,11 +736,11 @@ local function onCalcHitChance(e)
 	local ID = e.attacker.id
 	log:trace("Calc hit chance event, ID: %s, TS: %s", ID, TS)
 
-	-- If the attacker is the player, and the balancing of hitchance is enabled, let's multiply the hitchance by that value
-	if e.attacker == tes3.player and config.hitChanceModPlayer then
-		e.hitChance = (config.hitChanceMultiplier > 0) and e.hitChance * config.hitChanceMultiplier or e.hitChance
-	elseif e.attacker ~= tes3.player and config.hitChanceModNPC then
-		e.hitChance = (config.hitChanceMultiplier > 0) and e.hitChance * config.hitChanceMultiplier or e.hitChance
+	local isPlayer = e.attacker == tes3.player
+	if (isPlayer and config.hitChanceModPlayer) or (not isPlayer and config.hitChanceModNPC) then
+		if config.hitChanceMultiplier > 0 then
+			e.hitChance = e.hitChance * config.hitChanceMultiplier
+		end
 	end
 end
 
@@ -836,21 +821,14 @@ local function onDamage(e)
 	local TS = tes3.getSimulationTimestamp()
 	local ID = e.reference.id
 	log:trace("Damage event, ID: %s, TS: %s", ID, TS)
-	-- Damage multiplier stream for the player attacks
-	if e.source == tes3.damageSource.attack and e.attackerReference == tes3.player and config.damageMultiplierPlayer and
-	not e.projectile then
-		local oldDamage = e.damage or 0
-		e.damage = (e.damage * config.damageMultiplier) or 0
-		local newDamage = e.damage or 0
-		log:trace("Damage by the player modified. Original damage: %s, new damage: %s", oldDamage, newDamage)
-	end
-	-- Damage multiplier stream for NPC attacks
-	if e.source == tes3.damageSource.attack and e.attackerReference ~= tes3.player and config.damageMultiplierNPC and
-	not e.projectile then
-		local oldDamage = e.damage or 0
-		e.damage = (e.damage * config.damageMultiplier) or 0
-		local newDamage = e.damage or 0
-		log:trace("Damage by an NPC modified. Original damage: %s, new damage: %s", oldDamage, newDamage)
+	-- Damage multiplier for physical melee hits (player or NPC, gated by separate toggles)
+	if e.source == tes3.damageSource.attack and not e.projectile then
+		local attackerIsPlayer = e.attackerReference == tes3.player
+		if (attackerIsPlayer and config.damageMultiplierPlayer) or (not attackerIsPlayer and config.damageMultiplierNPC) then
+			local oldDamage = e.damage or 0
+			e.damage = oldDamage * config.damageMultiplier
+			log:trace("Damage modified. Original: %s, new: %s", oldDamage, e.damage)
+		end
 	end
 
 	mechanics.block.onDamage(e)
@@ -918,9 +896,8 @@ local function initialized()
 	event.register(tes3.event.simulate, onSimulate_slow)
 	event.register(tes3.event.mobileActivated, onMobileActivated)
 	event.register(tes3.event.mobileDeactivated, onMobileDeactivated)
-	event.register(tes3.event.equip, onEquip)
-	event.register("unequipped", onUnequip)
-	event.register(tes3.event.attackStart, onAttackStart_momentum)
+	event.register(tes3.event.equip, onEquipChange)
+	event.register("unequipped", onEquipChange)
 
 	-- ── NPC reactions + VFX ───────────────────────────────────────────────────
 	npcDodge.init()
@@ -962,9 +939,8 @@ local function modActivation()
 	event.unregister(tes3.event.simulate, onSimulate_slow)
 	event.unregister(tes3.event.mobileActivated, onMobileActivated)
 	event.unregister(tes3.event.mobileDeactivated, onMobileDeactivated)
-	event.unregister(tes3.event.equip, onEquip)
-	event.unregister("unequipped", onUnequip)
-	event.unregister(tes3.event.attackStart, onAttackStart_momentum)
+	event.unregister(tes3.event.equip, onEquipChange)
+	event.unregister("unequipped", onEquipChange)
 
 	npcDodge.shutdown()
 	resetState()

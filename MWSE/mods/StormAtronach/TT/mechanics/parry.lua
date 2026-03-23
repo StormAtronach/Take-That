@@ -53,6 +53,9 @@ local function onSimulate_slowmo()
 	tes3.worldController.simulationTimeScalar = scalar
 end
 
+-- Cached VFX object — looked up once so attackHitCallback pays no per-call cost.
+local VFXspark = nil ---@type tes3physicalObject?
+
 local parry = { name = "Parry", cooldown = false }
 
 -- Parry outcome lookup table
@@ -205,6 +208,10 @@ function parry.attackHitCallback(e)
 	local defenderWeapon = e.targetMobile.readiedWeapon
 	local defenderWeaponType = defenderWeapon and defenderWeapon.object.type or nil
 
+	-- Ranged attack: damage is still negated but stagger is suppressed for both sides.
+	local isRanged = attackerWeaponType ~= nil and common.rangedWeaponTypes[attackerWeaponType] == true
+	log:debug("attackHitCallback: isRanged=%s (weaponType=%s)", tostring(isRanged), tostring(attackerWeaponType))
+
 	-- Calculate skill levels (0-4 based on skill/25)
 	local attackerSkillCheck = common.weaponSkillCheck({ thisMobileActor = e.mobile, weapon = attackerWeaponType })
 	local attackerSkillLevel = math.floor(attackerSkillCheck.weaponSkill / 25)
@@ -228,6 +235,15 @@ function parry.attackHitCallback(e)
 		log:debug("Weapon damage: attacker=%.1f defender=%.1f (blocked=%.1f)", dmgAttacker, dmgDefender, blockedDamage)
 	end
 
+	-- For ranged attacks, suppress all stagger — only damage negation applies.
+	local attackerEffects = outcome.attacker
+	local defenderEffects = outcome.defender
+	if isRanged then
+		attackerEffects = { hitStun = false, knockDown = false }
+		defenderEffects = { hitStun = false, knockDown = false }
+		log:debug("Ranged parry: stagger suppressed for both sides")
+	end
+
 	-- Defer attacker effects to the next frame
 	local aKey = e.reference.id
 	local aHandle = tes3.makeSafeObjectHandle(e.reference)
@@ -235,7 +251,7 @@ function parry.attackHitCallback(e)
 		attackerGuardTimers[aKey]:cancel()
 		attackerGuardTimers[aKey] = nil
 	end
-	pendingAttackerOutcomes[aKey] = { attackerMobile = e.mobile, attackerEffects = outcome.attacker }
+	pendingAttackerOutcomes[aKey] = { attackerMobile = e.mobile, attackerEffects = attackerEffects }
 	timer.delayOneFrame(function()
 		local p = pendingAttackerOutcomes[aKey]
 		if not p then
@@ -266,13 +282,12 @@ function parry.attackHitCallback(e)
 	-- Defer defender effects to the next frame (mirrors attacker deferral)
 	local dHandle = tes3.makeSafeObjectHandle(e.targetReference)
 	local dMobile = e.targetMobile
-	local dEffects = outcome.defender
 	timer.delayOneFrame(function()
 		if not dHandle:valid() then
 			log:debug("Defender outcome expired: reference invalid")
 			return
 		end
-		applyEffects(dMobile, dHandle:getObject(), dEffects)
+		applyEffects(dMobile, dHandle:getObject(), defenderEffects)
 	end)
 
 	-- Play a sound
@@ -304,12 +319,21 @@ function parry.attackHitCallback(e)
 	local tr = e.targetReference
 	local t = e.targetMobile
 	-- VFX: collision mode fires sparks at detection time (main.lua); standard mode uses height-midpoint.
+	-- Ranged parry: sparks appear in front of the defender (at arm's reach).
 	parry.collisionMid = nil -- consume stored position regardless
 	if not config.parry_collision_mode then
-		local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") ---@cast VFXspark tes3physicalObject
+		VFXspark = VFXspark or tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3physicalObject]]
 		if VFXspark then
-			local vfxPos = (ar.position + tes3vector3.new(0, 0, a.height * 0.9) + tr.position +
-			               tes3vector3.new(0, 0, t.height * 0.9)) / 2
+			local vfxPos
+			if isRanged and e.targetReference == tes3.player then
+				local facing = tes3.player.facing
+				local pos = tes3.player.position
+				vfxPos = tes3vector3.new(pos.x + math.sin(facing) * 60, pos.y + math.cos(facing) * 60,
+				                         pos.z + tes3.mobilePlayer.height * 0.9)
+				log:debug("Ranged parry VFX: in front of player at %s", tostring(vfxPos))
+			else
+				vfxPos = common.actorMidpoint(ar, a, tr, t)
+			end
 			tes3.createVisualEffect { object = VFXspark, repeatCount = 1, position = vfxPos }
 		end
 	end

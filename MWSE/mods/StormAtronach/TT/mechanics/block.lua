@@ -47,6 +47,9 @@ local sets = {
 -- so a shield→weapon change mid-guard doesn't cause a jarring animation pop.
 local activeSet = nil
 
+-- Cached VFX object — looked up lazily on first use.
+local VFXspark = nil ---@type tes3static?
+
 -- ── Private helpers ────────────────────────────────────────────────────────────
 
 -- Load one set and wire controllers to the given scene node.
@@ -259,12 +262,12 @@ function block.onDamage(e)
 		tes3.playSound { sound = "steamRIGHT" }
 		tes3.mobilePlayer:exerciseSkill(tes3.skill.block, config.block_skill_gain)
 
-		local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3static]]
+		VFXspark = VFXspark or tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3static]]
 		if VFXspark and e.attackerReference and e.attacker and e.mobile then
-			local midPos =
-			(e.attackerReference.position + tes3vector3.new(0, 0, e.attacker.height * 0.9) + e.reference.position +
-			tes3vector3.new(0, 0, e.mobile.height * 0.9)) / 2
-			tes3.createVisualEffect { object = VFXspark, repeatCount = 1, position = midPos }
+			tes3.createVisualEffect {
+				object = VFXspark, repeatCount = 1,
+				position = common.actorMidpoint(e.attackerReference, e.attacker, e.reference, e.mobile),
+			}
 		end
 
 		if e.damage <= 0 then
@@ -328,12 +331,12 @@ function block.onDamage(e)
 			tes3.mobilePlayer:exerciseSkill(mySkillCheck.skillID, config.block_skill_gain)
 		end
 
-		local VFXspark = tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3static]]
+		VFXspark = VFXspark or tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3static]]
 		if VFXspark and e.attackerReference and e.attacker and e.mobile then
-			local midPos =
-			(e.attackerReference.position + tes3vector3.new(0, 0, e.attacker.height * 0.9) + e.reference.position +
-			tes3vector3.new(0, 0, e.mobile.height * 0.9)) / 2
-			tes3.createVisualEffect { object = VFXspark, repeatCount = 1, position = midPos }
+			tes3.createVisualEffect {
+				object = VFXspark, repeatCount = 1,
+				position = common.actorMidpoint(e.attackerReference, e.attacker, e.reference, e.mobile),
+			}
 		end
 
 		if e.damage <= 0 then

@@ -33,6 +33,9 @@ local incomingProjectiles = {}
 -- The Colour of Magic already attaches sa_trail to projectiles; skip our VFX if it's active.
 local tcomActive = tes3.isLuaModActive("sa.tcom")
 
+-- Cached spark VFX object — looked up lazily on first reflection.
+local VFXspark = nil ---@type tes3static?
+
 -- Reflects a projectile by setting impulseVelocity (which is additive with the engine's own
 -- velocity each frame). Supplying 2× the desired direction cancels the engine's contribution
 -- (-V) and nets to the reflected direction (+V). Returns the reflected velocity vector.
@@ -229,7 +232,8 @@ handleReflection = function(mob, vel, reflector)
 	end
 	processedReflections[mob.reference] = true
 	-- Sparks at the reflection point
-	tes3.createVisualEffect { object = "AXE_sa_VFX_WSparks", repeatCount = 1, position = mob.position:copy() }
+	VFXspark = VFXspark or tes3.getObject("AXE_sa_VFX_WSparks") --[[@as tes3static]]
+	tes3.createVisualEffect { object = VFXspark, repeatCount = 1, position = mob.position:copy() }
 	tes3.playSound { sound = "mysticism area", position = mob.position:copy() }
 	-- Trail VFX on the reflected projectile (skip if TCoM is active - it handles sa_trail itself)
 	if not tcomActive then

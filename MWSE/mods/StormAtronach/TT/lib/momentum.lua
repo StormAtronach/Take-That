@@ -1,4 +1,4 @@
--- actorState.lua - Per-actor momentum state for the momentum system
+-- momentum.lua - Per-actor momentum state for the momentum system
 --
 -- Only NPCs with a weapon equipped are tracked. Creatures are excluded because
 -- their movement is driven differently; unarmed actors are excluded because the
@@ -7,13 +7,12 @@
 -- State per actor:
 --   cachedWeightScalar  : precomputed speed penalty from weapon weight vs strength.
 --                         Cached on activation and refreshed on equip/unequip.
---   inAttack / peakSwing: attack phase tracking (used by scalars.recoveryScalar).
 --   inRecovery / recoveryStartTime / recoveryDuration : post-attack slowdown window.
 --
 -- state is keyed by tes3reference so there are no ID collisions between actors
 -- sharing the same base object.
 local config = require("StormAtronach.TT.config")
-local log = mwse.Logger.new({ moduleName = "actorState" })
+local log = mwse.Logger.new({ moduleName = "momentum" })
 
 local this = {}
 local state = {}
@@ -44,8 +43,6 @@ function this.activate(mobile)
 	local ref = mobile.reference
 	state[ref] = {
 		cachedWeightScalar = 1.0,
-		inAttack = false,
-		peakSwing = 0,
 		inRecovery = false,
 		recoveryStartTime = nil,
 		recoveryDuration = 0,

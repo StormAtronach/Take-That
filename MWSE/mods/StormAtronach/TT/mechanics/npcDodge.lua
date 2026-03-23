@@ -19,6 +19,7 @@
 -- Why priority -200: runs after main mod's hit-chance multiplier at -100.
 -- The roll is re-performed here so TT owns the final hit/miss decision.
 local nifAnim = require("StormAtronach.TT.lib.nifAnim")
+local common = require("StormAtronach.TT.lib.common")
 local config = require("StormAtronach.TT.config")
 local sounds = require("StormAtronach.TT.lib.sounds")
 local log = mwse.Logger.new({ moduleName = "npcDodge" })
@@ -28,14 +29,6 @@ local log = mwse.Logger.new({ moduleName = "npcDodge" })
 -- Only present for creatures; if a mesh name is absent the animation is blocked.
 local dodgeResults = json.loadfile("mods\\StormAtronach\\TT\\lib\\dodgeAnimResults") or {}
 log:debug("dodgeResults: loaded %d entries", #table.keys(dodgeResults))
-
-local function meshName(path)
-	if not path then
-		return nil
-	end
-	local name = path:match("[/\\]([^/\\]+)%.nif$") or path:match("^([^/\\]+)%.nif$")
-	return name and name:lower()
-end
 
 local dodgeAllowedCache = setmetatable({}, { __mode = "k" }) -- weak keys: refs not kept alive
 
@@ -53,7 +46,7 @@ local function dodgeAnimAllowed(ref)
 		allowed = true
 	else
 		local creature = ref.baseObject --[[@as tes3creature]]
-		local mn = meshName(creature.mesh)
+		local mn = common.meshName(creature.mesh)
 		if mn == nil then
 			log:debug("dodgeAnimAllowed: %s - no mesh path, blocking", ref.id)
 			allowed = false
@@ -286,10 +279,7 @@ local function dodgeOrHit(e)
 		log:debug("dodgeOrHit: weapon reaction - %s", reactionMesh)
 		playAnim(e.target, reactionMesh)
 		if sparksObject and e.attackerMobile and e.targetMobile then
-			local a = e.attackerMobile
-			local t = e.targetMobile
-			local mid = (e.attacker.position + tes3vector3.new(0, 0, a.height * 0.9) + e.target.position +
-			            tes3vector3.new(0, 0, t.height * 0.9)) / 2
+			local mid = common.actorMidpoint(e.attacker, e.attackerMobile, e.target, e.targetMobile)
 			tes3.createVisualEffect { object = sparksObject, repeatCount = 1, position = mid }
 		end
 		sounds.playRandom("parry", e.target, 1)
