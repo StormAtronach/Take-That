@@ -192,4 +192,84 @@ local function triggerDodge()
 		type = timer.simulate,
 	})
 
-	-- Dodge window: acrobatics tier (0–4) +
+	-- Dodge window: acrobatics tier (0–4) + armour class contribution
+	-- Range: 0.1 s (heavy armour, novice acrobatics) → 1.0 s (unarmoured, master)
+	local acrobaticsSkill        = tes3.mobilePlayer:getSkillValue(tes3.skill.acrobatics)
+	local acrobaticsLevel        = math.clamp(math.floor(acrobaticsSkill / 25), 0, 4)
+	local acrobaticsContribution = 0.1 + acrobaticsLevel / 10
+	local chestItem = tes3.getEquippedItem({
+		actor      = tes3.player,
+		objectType = tes3.objectType.armor,
+		slot       = tes3.armorSlot.cuirass,
+	})
+	local wc = chestItem and chestItem.object.weightClass
+	local armorContribution = (wc and armorBonus[wc]) or 0.5  -- 0.5 = unarmoured bonus
+	local dodgeDuration = math.max(0.1, math.min(acrobaticsContribution + armorContribution, 1))
+	log:debug("triggerDodge: duration=%.2f (acrobatics=%.2f armor=%.2f)",
+		dodgeDuration, acrobaticsContribution, armorContribution)
+
+	startDodgeAnim("back")
+	event.trigger("TT:dodgeTriggered", { duration = dodgeDuration })
+end
+
+-- ── Trigger 1: double-tap back key ────────────────────────────────────────────
+
+-- Resolved in dodge.init() from the configured keybind
+local backKeyCode = nil
+
+-- Double-tap detection state
+local lastBackPress   = nil
+local doubleTapWindow = 0.3  -- seconds: maximum gap between two taps to count as a double-tap
+
+local function onKeyDown_back(e)
+	log:debug("onKeyDown_back: keyCode=%d backKeyCode=%s", e.keyCode, tostring(backKeyCode))
+	if e.keyCode ~= backKeyCode then return end
+	if tes3ui.menuMode() then return end
+	if not tes3.mobilePlayer then return end
+	if not tes3.mobilePlayer.weaponDrawn then return end
+
+	local now = os.clock()
+	if lastBackPress and (now - lastBackPress) < doubleTapWindow then
+		log:debug("onKeyDown_back: double-tap confirmed (gap=%.3fs)", now - lastBackPress)
+		lastBackPress = nil
+		triggerDodge()
+	else
+		log:debug("onKeyDown_back: first tap recorded (t=%.3f)", now)
+		lastBackPress = now
+	end
+end
+
+-- ── Trigger 2: incoming attack while holding back ─────────────────────────────
+
+-- Called from main.lua's onAttack handler when e.targetMobile == tes3.mobilePlayer.
+-- Uses isKeyDown instead of listening to keyDown events because the back key may
+-- already have been pressed and held before the attack event fires.
+function dodge.onIncomingAttack()
+	log:debug("onIncomingAttack: called (backKeyCode=%s)", tostring(backKeyCode))
+	if not tes3.mobilePlayer then return end
+	if not backKeyCode then return end
+	local held = tes3.worldController.inputController:isKeyDown(backKeyCode)
+	log:debug("onIncomingAttack: backKey held=%s", tostring(held))
+	if not held then return end
+	triggerDodge()
+end
+
+-- ── Lifecycle ─────────────────────────────────────────────────────────────────
+
+function dodge.init()
+	local binding = tes3.getInputBinding(tes3.keybind.back)
+	if not binding then
+		log:warn("dodge.init: could not resolve back keybind")
+		return
+	end
+	backKeyCode = binding.code
+	log:debug("dodge.init: back key code=%d", backKeyCode)
+	event.register(tes3.event.keyDown, onKeyDown_back)
+end
+
+function dodge.shutdown()
+	dodge.reset()
+	event.unregister(tes3.event.keyDown, onKeyDown_back)
+end
+
+return dodge
