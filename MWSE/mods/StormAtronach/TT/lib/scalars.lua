@@ -16,11 +16,7 @@ local this = {}
 -- Computes the fatigue-based speed scalar for a mobile
 -- Returns a value between fatigueSpeedFloor and 1.0
 function this.fatigueScalar(mobile)
-	local max = mobile.fatigue.base
-	if max <= 0 then
-		return config.fatigueSpeedFloor
-	end
-	local ratio = math.clamp(mobile.fatigue.current / max, 0, 1)
+	local ratio = mobile:getFatigueTerm()
 	local scaled = ratio ^ config.fatigueExponent
 	return math.max(scaled, config.fatigueSpeedFloor)
 end

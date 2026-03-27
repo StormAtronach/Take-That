@@ -3,7 +3,6 @@
 local common = require("StormAtronach.TT.lib.common")
 local config = require("StormAtronach.TT.config")
 local actorState = require("StormAtronach.TT.lib.momentum")
-local scalars = require("StormAtronach.TT.lib.scalars")
 local gmst = require("StormAtronach.TT.lib.gmst")
 local npcDodge = require("StormAtronach.TT.mechanics.npcDodge")
 local log = mwse.Logger.new()
@@ -616,17 +615,51 @@ end
 
 -- On the simulate event, apply momentum scalars and manage the slow table
 local function onSimulate_slow()
+	local now            = os.clock()
+	local momentumOn     = config.momentum_enabled
+
 	-- Step 1: apply momentum + TT slow factor to all momentum-tracked actors
-	if config.momentum_enabled then
-		for ref, s in pairs(actorState.getAllState()) do
-			local mobile = ref.mobile
-			if not (mobile and mobile.animationController) then
-				goto nextActor
+	if momentumOn then
+		local fatigueFloor     = config.fatigueSpeedFloor
+		local fatigueExponent  = config.fatigueExponent
+		local recoveryEaseExp  = config.recoveryEaseExp
+		local recoverySpeedMin = config.recoverySpeedMin
+		local absoluteFloor    = config.absoluteSpeedFloor
+		for _, s in pairs(actorState.getAllState()) do
+			local mobile = s.ref.mobile
+			if not mobile then goto nextActor end
+			local animCtrl = mobile.animationController
+			if not animCtrl then goto nextActor end
+
+			-- fatigueScalar inlined
+			local ratio     = mobile:getFatigueTerm()
+			local fatigueSc = math.max(ratio ^ fatigueExponent, fatigueFloor)
+
+			-- recoveryScalar inlined
+			local recoverySc
+			if not s.inRecovery then
+				recoverySc = 1.0
+			else
+				local t = math.clamp((now - s.recoveryStartTime) / s.recoveryDuration, 0, 1)
+				if t >= 1.0 then
+					s.inRecovery = false
+					recoverySc = 1.0
+				else
+					local eased = 1.0 - (1.0 - t) ^ recoveryEaseExp
+					recoverySc = math.lerp(recoverySpeedMin, 1.0, eased)
+				end
 			end
-			local momentum = scalars.composite(scalars.fatigueScalar(mobile), s.cachedWeightScalar, scalars.recoveryScalar(s))
-			local slowEntry = common.slowedActors[ref]
-			local ttFactor = slowEntry and (slowTypeToSpeed[slowEntry.typeSlow] or 0.75) or 1.0
-			mobile.animationController.speedMultiplier = momentum * ttFactor
+
+			-- composite inlined
+			local newSpeed = math.max(fatigueSc * s.cachedWeightScalar * recoverySc, absoluteFloor)
+
+			local slowEntry = common.slowedActors[s.refId]
+			if slowEntry then newSpeed = newSpeed * (slowTypeToSpeed[slowEntry.typeSlow] or 0.75) end
+
+			if newSpeed ~= s.lastSpeed then
+				animCtrl.speedMultiplier = newSpeed
+				s.lastSpeed = newSpeed
+			end
 			::nextActor::
 		end
 	end
@@ -635,7 +668,7 @@ local function onSimulate_slow()
 	if next(common.slowedActors) == nil then
 		return
 	end
-	local slowedActorsAux = {}
+	local toRemove = {}
 	for actor_ref, actor in pairs(common.slowedActors) do
 		local startTime = actor.startTime
 		local duration = actor.duration
@@ -644,14 +677,11 @@ local function onSimulate_slow()
 		if not (startTime and duration and typeSlow) then
 			log:error("Values error. Actor ref = %s, Start time = %s, duration = %s, type = %s", actor_ref, startTime, duration,
 			          typeSlow)
-			goto continue
-		end
-
-		if os.clock() - startTime < duration then
-			slowedActorsAux[actor_ref] = actor
-			-- Momentum off: write slow directly (momentum on handles it in step 1)
-			if not config.momentum_enabled then
-				local animController = actor_ref.mobile and actor_ref.mobile.animationController
+			toRemove[#toRemove + 1] = actor_ref
+		elseif now - startTime < duration then
+			-- Still active; momentum off: write slow directly (momentum on handles it in step 1)
+			if not momentumOn then
+				local animController = actor.ref.mobile and actor.ref.mobile.animationController
 				if animController then
 					local base = actor.originalSpeed or 1.0
 					animController.speedMultiplier = base * (slowTypeToSpeed[typeSlow] or 0.75)
@@ -659,17 +689,18 @@ local function onSimulate_slow()
 			end
 		else
 			-- Expired: only restore speed for actors not covered by momentum
-			if not (config.momentum_enabled and actorState.get(actor_ref)) then
-				local animController = actor_ref.mobile and actor_ref.mobile.animationController
+			if not (momentumOn and actorState.get(actor.ref)) then
+				local animController = actor.ref.mobile and actor.ref.mobile.animationController
 				if animController then
 					animController.speedMultiplier = actor.originalSpeed or 1.0
 				end
 			end
+			toRemove[#toRemove + 1] = actor_ref
 		end
-
-		::continue::
 	end
-	common.slowedActors = slowedActorsAux
+	for i = 1, #toRemove do
+		common.slowedActors[toRemove[i]] = nil
+	end
 end
 
 --- @param e attackHitEventData

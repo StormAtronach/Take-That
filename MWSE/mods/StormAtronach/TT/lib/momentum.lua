@@ -9,10 +9,11 @@
 --                         Cached on activation and refreshed on equip/unequip.
 --   inRecovery / recoveryStartTime / recoveryDuration : post-attack slowdown window.
 --
--- state is keyed by tes3reference so there are no ID collisions between actors
--- sharing the same base object.
+-- state is keyed by refId string (ref.refId) for faster hash lookups.
 local config = require("StormAtronach.TT.config")
 local log = mwse.Logger.new({ moduleName = "momentum" })
+
+local STRENGTH_INDEX = tes3.attribute.strength + 1
 
 local this = {}
 local state = {}
@@ -24,7 +25,7 @@ end
 
 -- Returns the state entry for a specific reference, or nil if not tracked
 function this.get(ref)
-	return state[ref]
+	return state[ref.refId]
 end
 
 -- Called when a mobile becomes active in the world
@@ -41,11 +42,14 @@ function this.activate(mobile)
 		return
 	end
 	local ref = mobile.reference
-	state[ref] = {
+	state[ref.refId] = {
+		ref = ref,
+		refId = ref.refId,
 		cachedWeightScalar = 1.0,
 		inRecovery = false,
 		recoveryStartTime = nil,
 		recoveryDuration = 0,
+		lastSpeed = nil,
 	}
 	this.updateWeightScalar(ref)
 	log:debug("Activated: %s", ref.id)
@@ -54,13 +58,13 @@ end
 -- Called when a mobile is deactivated, cleans up state
 function this.deactivate(mobile)
 	log:debug("Deactivated: %s", mobile.reference.id)
-	state[mobile.reference] = nil
+	state[mobile.reference.refId] = nil
 end
 
 -- Recomputes and caches the weight scalar for a reference
 -- Should be called on activation and whenever equipment changes
 function this.updateWeightScalar(ref)
-	local s = state[ref]
+	local s = state[ref.refId]
 	if not s then
 		return
 	end
@@ -89,7 +93,7 @@ function this.getHandlingAttribute(mobile)
 	if mobile.actorType == tes3.actorType.creature then
 		return mobile.combat.current
 	else
-		return mobile.attributes[tes3.attribute.strength + 1].current
+		return mobile.attributes[STRENGTH_INDEX].current
 	end
 end
 
@@ -97,7 +101,7 @@ end
 -- swingCharge: 0.0 to 1.0, how charged the attack was
 -- weaponWeight: raw weapon weight, 0 for unarmed
 function this.startRecovery(ref, swingCharge, weaponWeight)
-	local s = state[ref]
+	local s = state[ref.refId]
 	if not s then
 		return
 	end

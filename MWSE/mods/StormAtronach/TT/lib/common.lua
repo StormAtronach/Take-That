@@ -2,8 +2,8 @@
 local common = {}
 
 -- slowedActors: tracks actors currently under a TT slow effect.
---   Key  : tes3reference
---   Value: { startTime, duration, typeSlow, originalSpeed }
+--   Key  : refId string (ref.refId)
+--   Value: { ref, startTime, duration, typeSlow, originalSpeed }
 --   typeSlow: 1 = 25 % reduction, 2 = 50 %, 3 = 75 %, 4 = full stop
 --   Iterated each simulate frame in main.lua; expired entries are removed there.
 common.slowedActors = {}
@@ -87,9 +87,10 @@ end
 --- If the actor is already slowed, the previous originalSpeed is carried forward.
 function common.slowActor(ref, duration, typeSlow)
 	local animCtrl = ref.mobile and ref.mobile.animationController
-	local prevEntry = common.slowedActors[ref]
+	local prevEntry = common.slowedActors[ref.refId]
 	local originalSpeed = (prevEntry and prevEntry.originalSpeed) or (animCtrl and animCtrl.speedMultiplier) or 1.0
-	common.slowedActors[ref] = {
+	common.slowedActors[ref.refId] = {
+		ref = ref,
 		startTime = os.clock(),
 		duration = duration,
 		typeSlow = typeSlow,
