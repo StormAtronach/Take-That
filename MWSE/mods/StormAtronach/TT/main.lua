@@ -615,24 +615,28 @@ end
 
 -- On the simulate event, apply momentum scalars and manage the slow table
 local function onSimulate_slow()
-	local now            = os.clock()
-	local momentumOn     = config.momentum_enabled
+	local now = os.clock()
+	local momentumOn = config.momentum_enabled
 
 	-- Step 1: apply momentum + TT slow factor to all momentum-tracked actors
 	if momentumOn then
-		local fatigueFloor     = config.fatigueSpeedFloor
-		local fatigueExponent  = config.fatigueExponent
-		local recoveryEaseExp  = config.recoveryEaseExp
+		local fatigueFloor = config.fatigueSpeedFloor
+		local fatigueExponent = config.fatigueExponent
+		local recoveryEaseExp = config.recoveryEaseExp
 		local recoverySpeedMin = config.recoverySpeedMin
-		local absoluteFloor    = config.absoluteSpeedFloor
-		for _, s in pairs(actorState.getAllState()) do
-			local mobile = s.ref.mobile
-			if not mobile then goto nextActor end
+		local absoluteFloor = config.absoluteSpeedFloor
+		for ref, s in pairs(actorState.getAllState()) do
+			local mobile = ref.mobile
+			if not mobile then
+				goto nextActor
+			end
 			local animCtrl = mobile.animationController
-			if not animCtrl then goto nextActor end
+			if not animCtrl then
+				goto nextActor
+			end
 
 			-- fatigueScalar inlined
-			local ratio     = mobile:getFatigueTerm()
+			local ratio = mobile:getFatigueTerm()
 			local fatigueSc = math.max(ratio ^ fatigueExponent, fatigueFloor)
 
 			-- recoveryScalar inlined
@@ -653,8 +657,10 @@ local function onSimulate_slow()
 			-- composite inlined
 			local newSpeed = math.max(fatigueSc * s.cachedWeightScalar * recoverySc, absoluteFloor)
 
-			local slowEntry = common.slowedActors[s.refId]
-			if slowEntry then newSpeed = newSpeed * (slowTypeToSpeed[slowEntry.typeSlow] or 0.75) end
+			local slowEntry = common.slowedActors[ref]
+			if slowEntry then
+				newSpeed = newSpeed * (slowTypeToSpeed[slowEntry.typeSlow] or 0.75)
+			end
 
 			if newSpeed ~= s.lastSpeed then
 				animCtrl.speedMultiplier = newSpeed
@@ -681,7 +687,7 @@ local function onSimulate_slow()
 		elseif now - startTime < duration then
 			-- Still active; momentum off: write slow directly (momentum on handles it in step 1)
 			if not momentumOn then
-				local animController = actor.ref.mobile and actor.ref.mobile.animationController
+				local animController = actor_ref.mobile and actor_ref.mobile.animationController
 				if animController then
 					local base = actor.originalSpeed or 1.0
 					animController.speedMultiplier = base * (slowTypeToSpeed[typeSlow] or 0.75)
@@ -689,8 +695,8 @@ local function onSimulate_slow()
 			end
 		else
 			-- Expired: only restore speed for actors not covered by momentum
-			if not (momentumOn and actorState.get(actor.ref)) then
-				local animController = actor.ref.mobile and actor.ref.mobile.animationController
+			if not (momentumOn and actorState.get(actor_ref)) then
+				local animController = actor_ref.mobile and actor_ref.mobile.animationController
 				if animController then
 					animController.speedMultiplier = actor.originalSpeed or 1.0
 				end

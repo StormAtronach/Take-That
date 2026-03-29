@@ -9,7 +9,7 @@
 --                         Cached on activation and refreshed on equip/unequip.
 --   inRecovery / recoveryStartTime / recoveryDuration : post-attack slowdown window.
 --
--- state is keyed by refId string (ref.refId) for faster hash lookups.
+-- state is keyed by tes3reference.
 local config = require("StormAtronach.TT.config")
 local log = mwse.Logger.new({ moduleName = "momentum" })
 
@@ -25,7 +25,7 @@ end
 
 -- Returns the state entry for a specific reference, or nil if not tracked
 function this.get(ref)
-	return state[ref.refId]
+	return state[ref]
 end
 
 -- Called when a mobile becomes active in the world
@@ -42,9 +42,7 @@ function this.activate(mobile)
 		return
 	end
 	local ref = mobile.reference
-	state[ref.refId] = {
-		ref = ref,
-		refId = ref.refId,
+	state[ref] = {
 		cachedWeightScalar = 1.0,
 		inRecovery = false,
 		recoveryStartTime = nil,
@@ -58,13 +56,13 @@ end
 -- Called when a mobile is deactivated, cleans up state
 function this.deactivate(mobile)
 	log:debug("Deactivated: %s", mobile.reference.id)
-	state[mobile.reference.refId] = nil
+	state[mobile.reference] = nil
 end
 
 -- Recomputes and caches the weight scalar for a reference
 -- Should be called on activation and whenever equipment changes
 function this.updateWeightScalar(ref)
-	local s = state[ref.refId]
+	local s = state[ref]
 	if not s then
 		return
 	end
@@ -101,7 +99,7 @@ end
 -- swingCharge: 0.0 to 1.0, how charged the attack was
 -- weaponWeight: raw weapon weight, 0 for unarmed
 function this.startRecovery(ref, swingCharge, weaponWeight)
-	local s = state[ref.refId]
+	local s = state[ref]
 	if not s then
 		return
 	end
