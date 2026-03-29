@@ -174,6 +174,7 @@ end
 -- Stop any active animation. Called on game load and mod toggle.
 function dodge.reset()
 	stopCurrentAnim()
+	dodge.active = false
 end
 
 -- ── Trigger logic ─────────────────────────────────────────────────────────────

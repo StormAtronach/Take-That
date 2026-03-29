@@ -193,7 +193,9 @@ function parry.attackHitCallback(e)
 	local aw = e.mobile.readiedWeapon
 	if aw and aw.object.enchantment and aw.object.enchantment.castType == tes3.enchantmentType.onStrike then
 		blockedEnchRef = e.reference
-		event.register("spellCasted", onSpellCasted_blockEnchant)
+		if not event.isRegistered("spellCasted", onSpellCasted_blockEnchant) then
+			event.register("spellCasted", onSpellCasted_blockEnchant)
+		end
 		timer.delayOneFrame(function()
 			event.unregister("spellCasted", onSpellCasted_blockEnchant)
 			blockedEnchRef = nil

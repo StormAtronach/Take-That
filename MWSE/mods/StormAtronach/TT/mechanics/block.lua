@@ -238,8 +238,8 @@ function block.onDamage(e)
 		log:trace("onDamage: weapon oneHanded=%s", tostring(oneHanded))
 	end
 
-	-- ── Branch 1: Sword and board ─────────────────────────────────────────────
-	if doYouHaveShield and oneHanded then
+	-- ── Branch 1: Sword and board, or shield only ────────────────────────────
+	if doYouHaveShield and (not doYouHaveWeapon or oneHanded) then
 		local blockSkill = tes3.mobilePlayer:getSkillValue(tes3.skill.block)
 		log:trace("onDamage: shield block, skill=%s", blockSkill)
 
